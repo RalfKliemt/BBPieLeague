@@ -6,7 +6,7 @@ from datetime import date
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Player, Team
 from bbpieleague.standings import calculate_standings
-from bbpieleague.storage import LeagueData, load_league, save_league
+from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league, save_league
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +114,19 @@ def _competition_label(data: LeagueData, competition_id: int) -> str:
         if competition.id == competition_id:
             return f"{competition.name} ({competition.kind})"
     return f"Unknown Competition #{competition_id}"
+
+
+def _match_in_competition(match: Match, competition_id: int) -> bool:
+    # Legacy matches created before multi-season support have competition_id=None.
+    # They belong only to the default season (id=1), not every selected season.
+    return match.competition_id == competition_id or (
+        match.competition_id is None and competition_id == DEFAULT_COMPETITION_ID
+    )
+
+
+def _teams_for_matches(teams: list[Team], matches: list[Match]) -> list[Team]:
+    season_team_ids = {match.home_team_id for match in matches} | {match.away_team_id for match in matches}
+    return [team for team in teams if team.id in season_team_ids]
 
 
 def cmd_init() -> int:
@@ -297,8 +310,7 @@ def cmd_list_matches(competition_id: int | None) -> int:
     matches = [
         match
         for match in data.matches
-        if match.competition_id == target_competition_id
-        or (match.competition_id is None and target_competition_id == data.active_competition_id)
+        if _match_in_competition(match, target_competition_id)
     ]
 
     if not matches:
@@ -324,12 +336,11 @@ def cmd_standings(competition_id: int | None) -> int:
     matches = [
         match
         for match in data.matches
-        if match.competition_id == target_competition_id
-        or (match.competition_id is None and target_competition_id == data.active_competition_id)
+        if _match_in_competition(match, target_competition_id)
     ]
-    rows = calculate_standings(data.teams, matches)
+    rows = calculate_standings(_teams_for_matches(data.teams, matches), matches)
     if not rows:
-        print("No teams yet.")
+        print("No standings yet for this competition.")
         return 0
 
     print(f"Competition: {_competition_label(data, target_competition_id)}")

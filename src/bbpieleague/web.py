@@ -9,7 +9,7 @@ from flask import Flask, flash, redirect, render_template, request, url_for
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Team
 from bbpieleague.standings import calculate_standings
-from bbpieleague.storage import LeagueData, load_league, save_league
+from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league, save_league
 
 
 def _next_team_id(data: LeagueData) -> int:
@@ -61,12 +61,20 @@ def _active_competition(data: LeagueData) -> Competition:
 
 def _matches_for_active(data: LeagueData) -> list[Match]:
     active_id = data.active_competition_id
-    return [
-        match
-        for match in data.matches
-        if match.competition_id == active_id
-        or (match.competition_id is None and active_id == data.active_competition_id)
-    ]
+    return [match for match in data.matches if _match_in_competition(match, active_id)]
+
+
+def _match_in_competition(match: Match, competition_id: int) -> bool:
+    # Legacy matches created before multi-season support have competition_id=None.
+    # They belong only to the default season (id=1), not every active season.
+    return match.competition_id == competition_id or (
+        match.competition_id is None and competition_id == DEFAULT_COMPETITION_ID
+    )
+
+
+def _teams_for_matches(teams: list[Team], matches: list[Match]) -> list[Team]:
+    season_team_ids = {match.home_team_id for match in matches} | {match.away_team_id for match in matches}
+    return [team for team in teams if team.id in season_team_ids]
 
 
 def create_app() -> Flask:
@@ -80,8 +88,9 @@ def create_app() -> Flask:
         data = load_league()
         active_competition = _active_competition(data)
         matches = sorted(_matches_for_active(data), key=lambda item: item.id, reverse=True)
-        standings = calculate_standings(data.teams, list(reversed(matches)))
         teams = sorted(data.teams, key=lambda item: item.id)
+        season_teams = _teams_for_matches(teams, matches)
+        standings = calculate_standings(season_teams, list(reversed(matches)))
         competitions = sorted(data.competitions, key=lambda item: item.id)
         team_names = {team.id: team.name for team in teams}
         team_coaches = {team.id: team.coach for team in teams}
