@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BBPieLeague</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700;800&family=Cinzel:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <div class="texture"></div>
+    <main class="page">
+      <header class="hero">
+        <h1>BBPieLeague</h1>
+        <p>Track blood, touchdowns, and glory across seasons and cups.</p>
+      </header>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <section class="alerts">
+            {% for category, message in messages %}
+              <div class="alert {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </section>
+        {% endif %}
+      {% endwith %}
+
+      <section class="current-context card">
+        <h2>Active Competition</h2>
+        <p>
+          <strong>#{{ active_competition.id }}</strong>
+          {{ active_competition.name }}
+          <span class="pill">{{ active_competition.kind }}</span>
+        </p>
+      </section>
+
+      <section class="grid-two">
+        <article class="card">
+          <h2>Add Team</h2>
+          <form method="post" action="{{ url_for('add_team') }}" class="form-grid">
+            <label>
+              Team Name
+              <input name="name" required />
+            </label>
+            <label>
+              Coach
+              <input name="coach" />
+            </label>
+            <button type="submit">Add Team</button>
+          </form>
+
+          <h3>Teams</h3>
+          <ul class="list">
+            {% for team in teams %}
+              <li>#{{ team.id }} {{ team.name }} {% if team.coach %}<span>({{ team.coach }})</span>{% endif %}</li>
+            {% else %}
+              <li>No teams yet.</li>
+            {% endfor %}
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Competitions</h2>
+          <form method="post" action="{{ url_for('add_competition') }}" class="form-grid">
+            <label>
+              Name
+              <input name="name" required />
+            </label>
+            <label>
+              Type
+              <select name="kind">
+                <option value="season">Season</option>
+                <option value="tournament">Tournament</option>
+              </select>
+            </label>
+            <button type="submit">Add Competition</button>
+          </form>
+
+          <form method="post" action="{{ url_for('use_competition') }}" class="inline-form">
+            <label>
+              Set Active
+              <select name="competition_id">
+                {% for competition in competitions %}
+                  <option value="{{ competition.id }}" {% if competition.id == active_competition.id %}selected{% endif %}>
+                    #{{ competition.id }} {{ competition.name }} ({{ competition.kind }})
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+            <button type="submit">Use</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="grid-two">
+        <article class="card">
+          <h2>Record Match</h2>
+          <form method="post" action="{{ url_for('add_match') }}" class="form-grid match-grid">
+            <label>
+              Home Team
+              <select name="home_team_id" required>
+                {% for team in teams %}
+                  <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Away Team
+              <select name="away_team_id" required>
+                {% for team in teams %}
+                  <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label>
+              Home TD
+              <input type="number" name="home_td" min="0" value="0" required />
+            </label>
+            <label>
+              Away TD
+              <input type="number" name="away_td" min="0" value="0" required />
+            </label>
+            <label>
+              Home CAS
+              <input type="number" name="home_cas" min="0" value="0" required />
+            </label>
+            <label>
+              Away CAS
+              <input type="number" name="away_cas" min="0" value="0" required />
+            </label>
+            <label>
+              Date
+              <input type="date" name="played_on" value="{{ today }}" required />
+            </label>
+            <button type="submit">Record Match</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Recent Matches</h2>
+          <ul class="list">
+            {% for match in matches %}
+              <li>
+                {{ match.played_on }}:
+                {{ team_names.get(match.home_team_id, '#' ~ match.home_team_id) }}
+                {{ match.home_td }}-{{ match.away_td }}
+                {{ team_names.get(match.away_team_id, '#' ~ match.away_team_id) }}
+                <span>(CAS {{ match.home_cas }}-{{ match.away_cas }})</span>
+              </li>
+            {% else %}
+              <li>No matches in this competition yet.</li>
+            {% endfor %}
+          </ul>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Standings</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pos</th>
+                <th>Team</th>
+                <th>GP</th>
+                <th>W</th>
+                <th>D</th>
+                <th>L</th>
+                <th>PTS</th>
+                <th>TD</th>
+                <th>CAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in standings %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ row.team_name }}</td>
+                  <td>{{ row.games }}</td>
+                  <td>{{ row.wins }}</td>
+                  <td>{{ row.draws }}</td>
+                  <td>{{ row.losses }}</td>
+                  <td>{{ row.points }}</td>
+                  <td>{{ row.td_for }}:{{ row.td_against }}</td>
+                  <td>{{ row.cas_for }}:{{ row.cas_against }}</td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="9">No teams yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

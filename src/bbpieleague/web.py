@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
+
+from flask import Flask, flash, redirect, render_template, request, url_for
+
+from bbpieleague.models import Competition, Match, Team
+from bbpieleague.standings import calculate_standings
+from bbpieleague.storage import LeagueData, load_league, save_league
+
+
+def _next_team_id(data: LeagueData) -> int:
+    if not data.teams:
+        return 1
+    return max(team.id for team in data.teams) + 1
+
+
+def _next_match_id(data: LeagueData) -> int:
+    if not data.matches:
+        return 1
+    return max(match.id for match in data.matches) + 1
+
+
+def _next_competition_id(data: LeagueData) -> int:
+    if not data.competitions:
+        return 1
+    return max(competition.id for competition in data.competitions) + 1
+
+
+def _competition_exists(data: LeagueData, competition_id: int) -> bool:
+    return any(competition.id == competition_id for competition in data.competitions)
+
+
+def _team_exists(data: LeagueData, team_id: int) -> bool:
+    return any(team.id == team_id for team in data.teams)
+
+
+def _active_competition(data: LeagueData) -> Competition:
+    for competition in data.competitions:
+        if competition.id == data.active_competition_id:
+            return competition
+    return data.competitions[0]
+
+
+def _matches_for_active(data: LeagueData) -> list[Match]:
+    active_id = data.active_competition_id
+    return [
+        match
+        for match in data.matches
+        if match.competition_id == active_id
+        or (match.competition_id is None and active_id == data.active_competition_id)
+    ]
+
+
+def create_app() -> Flask:
+    template_dir = Path(__file__).with_name("templates")
+    static_dir = Path(__file__).with_name("static")
+    app = Flask(__name__, template_folder=str(template_dir), static_folder=str(static_dir))
+    app.config["SECRET_KEY"] = "bbpieleague-dev-secret"
+
+    @app.get("/")
+    def index():
+        data = load_league()
+        active_competition = _active_competition(data)
+        matches = sorted(_matches_for_active(data), key=lambda item: item.id, reverse=True)
+        standings = calculate_standings(data.teams, list(reversed(matches)))
+        teams = sorted(data.teams, key=lambda item: item.id)
+        competitions = sorted(data.competitions, key=lambda item: item.id)
+        team_names = {team.id: team.name for team in teams}
+
+        return render_template(
+            "index.html",
+            active_competition=active_competition,
+            competitions=competitions,
+            teams=teams,
+            matches=matches,
+            standings=standings,
+            team_names=team_names,
+            today=date.today().isoformat(),
+        )
+
+    @app.post("/teams")
+    def add_team():
+        data = load_league()
+        name = request.form.get("name", "").strip()
+        coach = request.form.get("coach", "").strip()
+
+        if not name:
+            flash("Team name is required.", "error")
+            return redirect(url_for("index"))
+
+        team = Team(id=_next_team_id(data), name=name, coach=coach)
+        data.teams.append(team)
+        save_league(data)
+        flash(f"Added team #{team.id}: {team.name}", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/competitions")
+    def add_competition():
+        data = load_league()
+        name = request.form.get("name", "").strip()
+        kind = request.form.get("kind", "season").strip()
+
+        if not name:
+            flash("Competition name is required.", "error")
+            return redirect(url_for("index"))
+
+        try:
+            competition = Competition(id=_next_competition_id(data), name=name, kind=kind)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
+        data.competitions.append(competition)
+        save_league(data)
+        flash(f"Added {competition.kind}: {competition.name}", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/competitions/use")
+    def use_competition():
+        data = load_league()
+        competition_id_raw = request.form.get("competition_id", "").strip()
+
+        try:
+            competition_id = int(competition_id_raw)
+        except ValueError:
+            flash("Invalid competition id.", "error")
+            return redirect(url_for("index"))
+
+        if not _competition_exists(data, competition_id):
+            flash(f"Competition #{competition_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        data.active_competition_id = competition_id
+        save_league(data)
+        flash(f"Active competition set to #{competition_id}.", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/matches")
+    def add_match():
+        data = load_league()
+
+        def int_field(name: str) -> int:
+            raw = request.form.get(name, "").strip()
+            if raw == "":
+                raise ValueError(f"{name} is required")
+            return int(raw)
+
+        try:
+            home_team_id = int_field("home_team_id")
+            away_team_id = int_field("away_team_id")
+            home_td = int_field("home_td")
+            away_td = int_field("away_td")
+            home_cas = int_field("home_cas")
+            away_cas = int_field("away_cas")
+        except ValueError as exc:
+            flash(f"Invalid match input: {exc}", "error")
+            return redirect(url_for("index"))
+
+        played_on = request.form.get("played_on", date.today().isoformat()).strip()
+
+        if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
+            flash("Both teams must exist.", "error")
+            return redirect(url_for("index"))
+
+        try:
+            match = Match(
+                id=_next_match_id(data),
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                home_td=home_td,
+                away_td=away_td,
+                home_cas=home_cas,
+                away_cas=away_cas,
+                competition_id=data.active_competition_id,
+                played_on=played_on,
+            )
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
+        data.matches.append(match)
+        save_league(data)
+        flash(f"Recorded match #{match.id} in active competition.", "success")
+        return redirect(url_for("index"))
+
+    return app
+
+
+def main() -> int:
+    app = create_app()
+    app.run(host="127.0.0.1", port=8000, debug=False)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

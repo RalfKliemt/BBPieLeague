@@ -7,6 +7,7 @@ A lightweight Blood Bowl league manager to track:
 - Matches
 - Standings based on points, then TD difference, then CAS difference
 - Multiple competitions (seasons and tournaments)
+- Web UI for day-to-day league admin
 
 ## Quickstart
 
@@ -86,6 +87,25 @@ Show all matches:
 ```bash
 bbpieleague list-matches
 ```
+
+## Web UI
+
+Run the browser app:
+
+```bash
+bbpieleague-web
+```
+
+Then open:
+
+- <http://127.0.0.1:8000>
+
+What you can do in the UI:
+
+- Add teams
+- Add competitions and switch active competition
+- Record matches in the active competition
+- View recent matches and standings
 
 ## Data storage
 
