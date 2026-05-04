@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import date
 from pathlib import Path
 
@@ -57,7 +59,7 @@ def create_app() -> Flask:
     template_dir = Path(__file__).with_name("templates")
     static_dir = Path(__file__).with_name("static")
     app = Flask(__name__, template_folder=str(template_dir), static_folder=str(static_dir))
-    app.config["SECRET_KEY"] = "bbpieleague-dev-secret"
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
     @app.get("/")
     def index():
