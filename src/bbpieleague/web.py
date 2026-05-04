@@ -45,6 +45,13 @@ def _find_team(data: LeagueData, team_id: int) -> Team | None:
     return None
 
 
+def _find_competition(data: LeagueData, competition_id: int) -> Competition | None:
+    for competition in data.competitions:
+        if competition.id == competition_id:
+            return competition
+    return None
+
+
 def _active_competition(data: LeagueData) -> Competition:
     for competition in data.competitions:
         if competition.id == data.active_competition_id:
@@ -132,6 +139,37 @@ def create_app() -> Flask:
         data.active_competition_id = competition_id
         save_league(data)
         flash(f"Active competition set to #{competition_id}.", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/competitions/update")
+    def update_competition():
+        data = load_league()
+        competition_id_raw = request.form.get("competition_id", "").strip()
+        name = request.form.get("name", "").strip()
+
+        try:
+            competition_id = int(competition_id_raw)
+        except ValueError:
+            flash("Invalid competition id.", "error")
+            return redirect(url_for("index"))
+
+        competition = _find_competition(data, competition_id)
+        if competition is None:
+            flash(f"Competition #{competition_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        if not name:
+            flash("Competition name is required.", "error")
+            return redirect(url_for("index"))
+
+        if any(existing.id != competition_id and existing.name.lower() == name.lower() for existing in data.competitions):
+            flash("A season with that name already exists.", "error")
+            return redirect(url_for("index"))
+
+        previous_name = competition.name
+        competition.name = name
+        save_league(data)
+        flash(f"Renamed season #{competition.id}: {previous_name} -> {competition.name}", "success")
         return redirect(url_for("index"))
 
     @app.post("/teams")

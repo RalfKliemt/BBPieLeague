@@ -20,16 +20,6 @@
         <p>Track blood, touchdowns, and glory across seasons and cups.</p>
       </header>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <section class="alerts">
-            {% for category, message in messages %}
-              <div class="alert {{ category }}">{{ message }}</div>
-            {% endfor %}
-          </section>
-        {% endif %}
-      {% endwith %}
-
       <section class="current-context card">
         <div class="context-main">
           <h2>Active Competition</h2>
@@ -39,7 +29,7 @@
           <form method="post" action="{{ url_for('use_competition') }}" class="context-form context-form-switch">
             <label>
               <span class="visually-hidden">Set active competition</span>
-              <select name="competition_id" aria-label="Set active competition">
+              <select name="competition_id" aria-label="Set active competition" onchange="this.form.requestSubmit()">
                 {% for competition in competitions %}
                   <option value="{{ competition.id }}" {% if competition.id == active_competition.id %}selected{% endif %}>
                     #{{ competition.id }} {{ competition.name }} ({{ competition.kind }})
@@ -47,24 +37,33 @@
                 {% endfor %}
               </select>
             </label>
-            <button type="submit" class="icon-btn" title="Switch active competition" aria-label="Switch active competition">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M7 7h12l-3-3m3 3-3 3M17 17H5l3 3m-3-3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
           </form>
 
-          <button
-            type="button"
-            class="icon-btn"
-            title="Add season"
-            aria-label="Add season"
-            onclick="document.getElementById('add-season-dialog').showModal()"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-          </button>
+          <div class="context-buttons">
+            <button
+              type="button"
+              class="icon-btn"
+              title="Edit season name"
+              aria-label="Edit season name"
+              onclick="document.getElementById('edit-season-dialog').showModal()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 20h4l10.5-10.5a1.4 1.4 0 0 0 0-2L16.5 5a1.4 1.4 0 0 0-2 0L4 15.5V20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              class="icon-btn"
+              title="Add season"
+              aria-label="Add season"
+              onclick="document.getElementById('add-season-dialog').showModal()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -92,6 +91,35 @@
             </select>
           </label>
           <button type="submit">Create Season</button>
+        </form>
+      </dialog>
+
+      <dialog id="edit-season-dialog" class="modal">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close edit season popup" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+        </form>
+
+        <h2>Edit Season</h2>
+        <form method="post" action="{{ url_for('update_competition') }}" class="form-grid modal-form" id="edit-season-form">
+          <label>
+            Season
+            <select name="competition_id" id="edit-season-id" required>
+              {% for competition in competitions %}
+                <option value="{{ competition.id }}" data-name="{{ competition.name }}">
+                  #{{ competition.id }} {{ competition.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Season Name
+            <input name="name" id="edit-season-name" required placeholder="Season 2" />
+          </label>
+          <button type="submit">Save Season Name</button>
         </form>
       </dialog>
 
@@ -285,6 +313,8 @@
         const teamSelect = document.getElementById("edit-team-id");
         const teamNameInput = document.getElementById("edit-team-name");
         const coachInput = document.getElementById("edit-team-coach");
+        const seasonSelect = document.getElementById("edit-season-id");
+        const seasonNameInput = document.getElementById("edit-season-name");
 
         if (!teamSelect || !teamNameInput || !coachInput) {
           return;
@@ -303,6 +333,20 @@
 
         teamSelect.addEventListener("change", syncTeamFields);
         syncTeamFields();
+
+        if (seasonSelect && seasonNameInput) {
+          const syncSeasonFields = () => {
+            const selected = seasonSelect.options[seasonSelect.selectedIndex];
+            if (!selected) {
+              seasonNameInput.value = "";
+              return;
+            }
+            seasonNameInput.value = selected.dataset.name || "";
+          };
+
+          seasonSelect.addEventListener("change", syncSeasonFields);
+          syncSeasonFields();
+        }
       })();
     </script>
   </body>

@@ -186,9 +186,15 @@ body {
   gap: 0.55rem;
 }
 
+.context-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .context-form {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 0.5rem;
 }
 
