@@ -3,8 +3,10 @@
 A lightweight Blood Bowl league manager to track:
 
 - Teams
+- Players (rosters)
 - Matches
 - Standings based on points, then TD difference, then CAS difference
+- Multiple competitions (seasons and tournaments)
 
 ## Quickstart
 
@@ -36,10 +38,41 @@ List teams:
 bbpieleague list-teams
 ```
 
+Add players to team rosters:
+
+```bash
+bbpieleague add-player 1 "Ludwig Kruger" --position "Blitzer" --number 7
+bbpieleague add-player 1 "Otto Weiss" --position "Thrower" --number 12
+```
+
+List all players (or one team with --team-id):
+
+```bash
+bbpieleague list-players
+bbpieleague list-players --team-id 1
+```
+
 Record a match:
 
 ```bash
 bbpieleague record-match 1 2 2 1 3 2 --played-on 2026-05-04
+```
+
+Manage seasons and tournaments:
+
+```bash
+bbpieleague add-competition "Season 1" --type season
+bbpieleague add-competition "Spike Cup" --type tournament
+bbpieleague list-competitions
+bbpieleague use-competition 2
+```
+
+Record/list/standings use the active competition by default, or override with --competition-id:
+
+```bash
+bbpieleague record-match 1 2 2 1 3 2 --competition-id 2
+bbpieleague list-matches --competition-id 2
+bbpieleague standings --competition-id 2
 ```
 
 Show standings:

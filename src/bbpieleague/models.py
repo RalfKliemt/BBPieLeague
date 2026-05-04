@@ -14,6 +14,36 @@ class Team:
 
 
 @dataclass(slots=True)
+class Player:
+    id: int
+    team_id: int
+    name: str
+    position: str = ""
+    number: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.number is not None and self.number < 1:
+            raise ValueError("number must be 1 or greater when provided.")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class Competition:
+    id: int
+    name: str
+    kind: str = "season"
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"season", "tournament"}:
+            raise ValueError("kind must be either 'season' or 'tournament'.")
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class Match:
     id: int
     home_team_id: int
@@ -22,6 +52,7 @@ class Match:
     away_td: int
     home_cas: int
     away_cas: int
+    competition_id: int | None = None
     played_on: str = ""
 
     def __post_init__(self) -> None:
