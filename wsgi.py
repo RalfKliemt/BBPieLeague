@@ -19,6 +19,10 @@ project_root = Path(__file__).parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+src_root = project_root / "src"
+if str(src_root) not in sys.path:
+  sys.path.insert(0, str(src_root))
+
 # Ensure the data directory exists next to this file (persistent on PythonAnywhere).
 data_dir = project_root / "data"
 data_dir.mkdir(exist_ok=True)
