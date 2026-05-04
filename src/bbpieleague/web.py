@@ -38,6 +38,13 @@ def _team_exists(data: LeagueData, team_id: int) -> bool:
     return any(team.id == team_id for team in data.teams)
 
 
+def _find_team(data: LeagueData, team_id: int) -> Team | None:
+    for team in data.teams:
+        if team.id == team_id:
+            return team
+    return None
+
+
 def _active_competition(data: LeagueData) -> Competition:
     for competition in data.competitions:
         if competition.id == data.active_competition_id:
@@ -146,6 +153,39 @@ def create_app() -> Flask:
         data.teams.append(team)
         save_league(data)
         flash(f"Registered team #{team.id}: {team.name}", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/teams/update")
+    def update_team():
+        data = load_league()
+        team_id_raw = request.form.get("team_id", "").strip()
+        name = request.form.get("name", "").strip()
+        coach = request.form.get("coach", "").strip()
+
+        try:
+            team_id = int(team_id_raw)
+        except ValueError:
+            flash("Invalid team id.", "error")
+            return redirect(url_for("index"))
+
+        team = _find_team(data, team_id)
+        if team is None:
+            flash(f"Team #{team_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        if not name:
+            flash("Team name is required.", "error")
+            return redirect(url_for("index"))
+
+        if any(existing.id != team_id and existing.name.lower() == name.lower() for existing in data.teams):
+            flash("A team with that name already exists.", "error")
+            return redirect(url_for("index"))
+
+        previous_name = team.name
+        team.name = name
+        team.coach = coach
+        save_league(data)
+        flash(f"Updated team #{team.id}: {previous_name} -> {team.name}", "success")
         return redirect(url_for("index"))
 
     @app.post("/matches")

@@ -243,6 +243,12 @@ body {
   margin-bottom: 0.55rem;
 }
 
+.section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .section-head h2 {
   margin-bottom: 0;
 }

@@ -98,17 +98,30 @@
       <section class="card">
         <div class="section-head">
           <h2>Standings</h2>
-          <button
-            type="button"
-            class="icon-btn"
-            title="Register team"
-            aria-label="Register team"
-            onclick="document.getElementById('add-team-dialog').showModal()"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-          </button>
+          <div class="section-actions">
+            <button
+              type="button"
+              class="icon-btn"
+              title="Manage team"
+              aria-label="Manage team"
+              onclick="document.getElementById('edit-team-dialog').showModal()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 20h4l10.5-10.5a1.4 1.4 0 0 0 0-2L16.5 5a1.4 1.4 0 0 0-2 0L4 15.5V20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              title="Register team"
+              aria-label="Register team"
+              onclick="document.getElementById('add-team-dialog').showModal()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -173,6 +186,39 @@
         </form>
       </dialog>
 
+      <dialog id="edit-team-dialog" class="modal">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close manage team popup" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+
+        <h2>Manage Team</h2>
+        <form method="post" action="{{ url_for('update_team') }}" class="form-grid modal-form" id="edit-team-form">
+          <label>
+            Team
+            <select name="team_id" id="edit-team-id" required>
+              {% for team in teams %}
+                <option value="{{ team.id }}" data-name="{{ team.name }}" data-coach="{{ team.coach }}">
+                  #{{ team.id }} {{ team.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Team Name
+            <input name="name" id="edit-team-name" required placeholder="Middenheim Maulers" />
+          </label>
+          <label>
+            Coach
+            <input name="coach" id="edit-team-coach" placeholder="optional" />
+          </label>
+          <button type="submit">Save Team</button>
+        </form>
+      </dialog>
+
       <section class="card">
         <h2>Record Match</h2>
         <form method="post" action="{{ url_for('add_match') }}" class="form-grid match-grid">
@@ -233,5 +279,31 @@
         </ul>
       </section>
     </main>
+
+    <script>
+      (() => {
+        const teamSelect = document.getElementById("edit-team-id");
+        const teamNameInput = document.getElementById("edit-team-name");
+        const coachInput = document.getElementById("edit-team-coach");
+
+        if (!teamSelect || !teamNameInput || !coachInput) {
+          return;
+        }
+
+        const syncTeamFields = () => {
+          const selected = teamSelect.options[teamSelect.selectedIndex];
+          if (!selected) {
+            teamNameInput.value = "";
+            coachInput.value = "";
+            return;
+          }
+          teamNameInput.value = selected.dataset.name || "";
+          coachInput.value = selected.dataset.coach || "";
+        };
+
+        teamSelect.addEventListener("change", syncTeamFields);
+        syncTeamFields();
+      })();
+    </script>
   </body>
 </html>
