@@ -18,6 +18,7 @@ class LeagueData:
     competitions: list[Competition]
     active_competition_id: int
     matches: list[Match]
+    default_competition_id: int = DEFAULT_COMPETITION_ID
 
 
 def get_data_path() -> Path:
@@ -35,6 +36,7 @@ def load_league(path: Path | None = None) -> LeagueData:
             ],
             active_competition_id=DEFAULT_COMPETITION_ID,
             matches=[],
+            default_competition_id=DEFAULT_COMPETITION_ID,
         )
 
     with data_path.open("r", encoding="utf-8") as handle:
@@ -48,13 +50,18 @@ def load_league(path: Path | None = None) -> LeagueData:
             Competition(id=DEFAULT_COMPETITION_ID, name=DEFAULT_COMPETITION_NAME, kind="season")
         ]
 
+    competition_ids = {competition.id for competition in competitions}
+    default_competition_id = payload.get("default_competition_id")
+    if default_competition_id is None:
+        default_competition_id = competitions[0].id
+    if default_competition_id not in competition_ids:
+        default_competition_id = competitions[0].id
+
     active_competition_id = payload.get("active_competition_id")
     if active_competition_id is None:
-        active_competition_id = competitions[0].id
-
-    competition_ids = {competition.id for competition in competitions}
+        active_competition_id = default_competition_id
     if active_competition_id not in competition_ids:
-        active_competition_id = competitions[0].id
+        active_competition_id = default_competition_id
 
     matches = [Match(**item) for item in payload.get("matches", [])]
     return LeagueData(
@@ -63,6 +70,7 @@ def load_league(path: Path | None = None) -> LeagueData:
         competitions=competitions,
         active_competition_id=active_competition_id,
         matches=matches,
+        default_competition_id=default_competition_id,
     )
 
 
@@ -75,6 +83,7 @@ def save_league(data: LeagueData, path: Path | None = None) -> Path:
         "players": [player.to_dict() for player in data.players],
         "competitions": [competition.to_dict() for competition in data.competitions],
         "active_competition_id": data.active_competition_id,
+        "default_competition_id": data.default_competition_id,
         "matches": [match.to_dict() for match in data.matches],
     }
     with data_path.open("w", encoding="utf-8") as handle:

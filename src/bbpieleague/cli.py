@@ -138,6 +138,7 @@ def cmd_init() -> int:
             competitions=[default_competition],
             active_competition_id=default_competition.id,
             matches=[],
+            default_competition_id=default_competition.id,
         )
     )
     print(f"Initialized league file at: {path}")

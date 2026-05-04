@@ -105,6 +105,7 @@ def create_app() -> Flask:
         return render_template(
             "index.html",
             active_competition=active_competition,
+            default_competition_id=data.default_competition_id,
             competitions=competitions,
             competition_themes=COMPETITION_THEME_CHOICES,
             teams=teams,
@@ -162,6 +163,7 @@ def create_app() -> Flask:
         data = load_league()
         competition_id_raw = request.form.get("competition_id", "").strip()
         name = request.form.get("name", "").strip()
+        set_default = request.form.get("set_default") == "on"
 
         try:
             competition_id = int(competition_id_raw)
@@ -184,8 +186,19 @@ def create_app() -> Flask:
 
         previous_name = competition.name
         competition.name = name
+
+        if set_default:
+            data.default_competition_id = competition.id
+            data.active_competition_id = competition.id
+
         save_league(data)
-        flash(f"Renamed season #{competition.id}: {previous_name} -> {competition.name}", "success")
+        if set_default:
+            flash(
+                f"Renamed season #{competition.id}: {previous_name} -> {competition.name}. Set as default season.",
+                "success",
+            )
+        else:
+            flash(f"Renamed season #{competition.id}: {previous_name} -> {competition.name}", "success")
         return redirect(url_for("index"))
 
     @app.post("/teams")

@@ -32,7 +32,7 @@
               <select name="competition_id" aria-label="Set active competition" onchange="this.form.requestSubmit()">
                 {% for competition in competitions %}
                   <option value="{{ competition.id }}" {% if competition.id == active_competition.id %}selected{% endif %}>
-                    #{{ competition.id }} {{ competition.name }} ({{ competition.kind }})
+                    #{{ competition.id }} {{ competition.name }} ({{ competition.kind }}){% if competition.id == default_competition_id %} [default]{% endif %}
                   </option>
                 {% endfor %}
               </select>
@@ -109,7 +109,7 @@
             Season
             <select name="competition_id" id="edit-season-id" required>
               {% for competition in competitions %}
-                <option value="{{ competition.id }}" data-name="{{ competition.name }}">
+                <option value="{{ competition.id }}" data-name="{{ competition.name }}" data-is-default="{{ '1' if competition.id == default_competition_id else '0' }}">
                   #{{ competition.id }} {{ competition.name }}
                 </option>
               {% endfor %}
@@ -118,6 +118,10 @@
           <label>
             Season Name
             <input name="name" id="edit-season-name" required placeholder="Season 2" />
+          </label>
+          <label>
+            <input type="checkbox" name="set_default" id="edit-season-default" />
+            Set as default season
           </label>
           <button type="submit">Save Season Name</button>
         </form>
@@ -414,6 +418,7 @@
         const coachInput = document.getElementById("edit-team-coach");
         const seasonSelect = document.getElementById("edit-season-id");
         const seasonNameInput = document.getElementById("edit-season-name");
+        const seasonDefaultInput = document.getElementById("edit-season-default");
         const matchSelect = document.getElementById("edit-match-id");
         const matchHomeTeam = document.getElementById("edit-match-home-team");
         const matchAwayTeam = document.getElementById("edit-match-away-team");
@@ -446,9 +451,15 @@
             const selected = seasonSelect.options[seasonSelect.selectedIndex];
             if (!selected) {
               seasonNameInput.value = "";
+              if (seasonDefaultInput) {
+                seasonDefaultInput.checked = false;
+              }
               return;
             }
             seasonNameInput.value = selected.dataset.name || "";
+            if (seasonDefaultInput) {
+              seasonDefaultInput.checked = selected.dataset.isDefault === "1";
+            }
           };
 
           seasonSelect.addEventListener("change", syncSeasonFields);
