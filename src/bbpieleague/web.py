@@ -5,15 +5,9 @@ from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from bbpieleague.models import Competition, Match, Team
+from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import LeagueData, load_league, save_league
-
-
-def _next_team_id(data: LeagueData) -> int:
-    if not data.teams:
-        return 1
-    return max(team.id for team in data.teams) + 1
 
 
 def _next_match_id(data: LeagueData) -> int:
@@ -73,6 +67,7 @@ def create_app() -> Flask:
             "index.html",
             active_competition=active_competition,
             competitions=competitions,
+            competition_themes=COMPETITION_THEME_CHOICES,
             teams=teams,
             matches=matches,
             standings=standings,
@@ -80,34 +75,19 @@ def create_app() -> Flask:
             today=date.today().isoformat(),
         )
 
-    @app.post("/teams")
-    def add_team():
-        data = load_league()
-        name = request.form.get("name", "").strip()
-        coach = request.form.get("coach", "").strip()
-
-        if not name:
-            flash("Team name is required.", "error")
-            return redirect(url_for("index"))
-
-        team = Team(id=_next_team_id(data), name=name, coach=coach)
-        data.teams.append(team)
-        save_league(data)
-        flash(f"Added team #{team.id}: {team.name}", "success")
-        return redirect(url_for("index"))
-
     @app.post("/competitions")
     def add_competition():
         data = load_league()
         name = request.form.get("name", "").strip()
         kind = request.form.get("kind", "season").strip()
+        theme = request.form.get("theme", "imperial").strip()
 
         if not name:
             flash("Competition name is required.", "error")
             return redirect(url_for("index"))
 
         try:
-            competition = Competition(id=_next_competition_id(data), name=name, kind=kind)
+            competition = Competition(id=_next_competition_id(data), name=name, kind=kind, theme=theme)
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("index"))

@@ -4,7 +4,7 @@ import argparse
 from collections import defaultdict
 from datetime import date
 
-from bbpieleague.models import Competition, Match, Player, Team
+from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Player, Team
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import LeagueData, load_league, save_league
 
@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["season", "tournament"],
         default="season",
         help="Competition type",
+    )
+    add_comp_parser.add_argument(
+        "--theme",
+        choices=COMPETITION_THEME_CHOICES,
+        default="imperial",
+        help="Competition color theme",
     )
 
     sub.add_parser("list-competitions", help="List seasons/tournaments")
@@ -147,12 +153,12 @@ def cmd_list_teams() -> int:
     return 0
 
 
-def cmd_add_competition(name: str, kind: str) -> int:
+def cmd_add_competition(name: str, kind: str, theme: str) -> int:
     data = load_league()
-    competition = Competition(id=_next_competition_id(data), name=name, kind=kind)
+    competition = Competition(id=_next_competition_id(data), name=name, kind=kind, theme=theme)
     data.competitions.append(competition)
     save_league(data)
-    print(f"Added {competition.kind} #{competition.id}: {competition.name}")
+    print(f"Added {competition.kind} #{competition.id}: {competition.name} [{competition.theme}]")
     return 0
 
 
@@ -162,11 +168,11 @@ def cmd_list_competitions() -> int:
         print("No competitions yet.")
         return 0
 
-    print("ID  Type        Active  Name")
-    print("--  ----------  ------  ------------------------")
+    print("ID  Type        Theme     Active  Name")
+    print("--  ----------  --------  ------  ------------------------")
     for competition in sorted(data.competitions, key=lambda item: item.id):
         active = "*" if competition.id == data.active_competition_id else ""
-        print(f"{competition.id:<3} {competition.kind:<10}  {active:<6}  {competition.name}")
+        print(f"{competition.id:<3} {competition.kind:<10}  {competition.theme:<8}  {active:<6}  {competition.name}")
     return 0
 
 
@@ -350,7 +356,7 @@ def main() -> int:
         if args.command == "list-teams":
             return cmd_list_teams()
         if args.command == "add-competition":
-            return cmd_add_competition(name=args.name, kind=args.kind)
+            return cmd_add_competition(name=args.name, kind=args.kind, theme=args.theme)
         if args.command == "list-competitions":
             return cmd_list_competitions()
         if args.command == "use-competition":

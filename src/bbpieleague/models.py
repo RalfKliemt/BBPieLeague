@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 
+COMPETITION_THEME_CHOICES = ("imperial", "chaos", "orc", "undead")
+
+
 @dataclass(slots=True)
 class Team:
     id: int
@@ -34,10 +37,14 @@ class Competition:
     id: int
     name: str
     kind: str = "season"
+    theme: str = "imperial"
 
     def __post_init__(self) -> None:
         if self.kind not in {"season", "tournament"}:
             raise ValueError("kind must be either 'season' or 'tournament'.")
+        if self.theme not in COMPETITION_THEME_CHOICES:
+            allowed = ", ".join(COMPETITION_THEME_CHOICES)
+            raise ValueError(f"theme must be one of: {allowed}.")
 
     def to_dict(self) -> dict:
         return asdict(self)

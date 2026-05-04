@@ -64,6 +64,7 @@ Manage seasons and tournaments:
 ```bash
 bbpieleague add-competition "Season 1" --type season
 bbpieleague add-competition "Spike Cup" --type tournament
+bbpieleague add-competition "Chaos Invitational" --type tournament --theme chaos
 bbpieleague list-competitions
 bbpieleague use-competition 2
 ```
@@ -102,10 +103,17 @@ Then open:
 
 What you can do in the UI:
 
-- Add teams
 - Add competitions and switch active competition
+- Pick a visual theme per competition (imperial, chaos, orc, undead)
 - Record matches in the active competition
 - View recent matches and standings
+- View teams (read-only)
+
+Use CLI for team creation:
+
+```bash
+bbpieleague add-team "Reikland Reavers" --coach "Griff"
+```
 
 ## Data storage
 
