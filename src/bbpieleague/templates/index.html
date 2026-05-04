@@ -31,139 +31,92 @@
       {% endwith %}
 
       <section class="current-context card">
-        <h2>Active Competition</h2>
-        <p>
-          <strong>#{{ active_competition.id }}</strong>
-          {{ active_competition.name }}
-          <span class="pill">{{ active_competition.kind }}</span>
-          <span class="pill theme-pill">{{ active_competition.theme }}</span>
-        </p>
-      </section>
+        <div class="context-main">
+          <h2>Active Competition</h2>
+        </div>
 
-      <section class="grid-two">
-        <article class="card">
-          <h2>Teams</h2>
-          <p class="hint">Read-only in web mode for now.</p>
-          <ul class="list">
-            {% for team in teams %}
-              <li>#{{ team.id }} {{ team.name }} {% if team.coach %}<span>({{ team.coach }})</span>{% endif %}</li>
-            {% else %}
-              <li>No teams yet.</li>
-            {% endfor %}
-          </ul>
-        </article>
-
-        <article class="card">
-          <h2>Competitions</h2>
-          <form method="post" action="{{ url_for('add_competition') }}" class="form-grid">
+        <div class="context-actions">
+          <form method="post" action="{{ url_for('use_competition') }}" class="context-form context-form-switch">
             <label>
-              Name
-              <input name="name" required />
-            </label>
-            <label>
-              Type
-              <select name="kind">
-                <option value="season">Season</option>
-                <option value="tournament">Tournament</option>
-              </select>
-            </label>
-            <label>
-              Theme
-              <select name="theme">
-                {% for theme_name in competition_themes %}
-                  <option value="{{ theme_name }}">{{ theme_name|capitalize }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit">Add Competition</button>
-          </form>
-
-          <form method="post" action="{{ url_for('use_competition') }}" class="inline-form">
-            <label>
-              Set Active
-              <select name="competition_id">
+              <span class="visually-hidden">Set active competition</span>
+              <select name="competition_id" aria-label="Set active competition">
                 {% for competition in competitions %}
                   <option value="{{ competition.id }}" {% if competition.id == active_competition.id %}selected{% endif %}>
-                    #{{ competition.id }} {{ competition.name }} ({{ competition.kind }}, {{ competition.theme }})
+                    #{{ competition.id }} {{ competition.name }} ({{ competition.kind }})
                   </option>
                 {% endfor %}
               </select>
             </label>
-            <button type="submit">Use</button>
+            <button type="submit" class="icon-btn" title="Switch active competition" aria-label="Switch active competition">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 7h12l-3-3m3 3-3 3M17 17H5l3 3m-3-3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
           </form>
-        </article>
+
+          <button
+            type="button"
+            class="icon-btn"
+            title="Add season"
+            aria-label="Add season"
+            onclick="document.getElementById('add-season-dialog').showModal()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
       </section>
 
-      <section class="grid-two">
-        <article class="card">
-          <h2>Record Match</h2>
-          <form method="post" action="{{ url_for('add_match') }}" class="form-grid match-grid">
-            <label>
-              Home Team
-              <select name="home_team_id" required>
-                {% for team in teams %}
-                  <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label>
-              Away Team
-              <select name="away_team_id" required>
-                {% for team in teams %}
-                  <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
-                {% endfor %}
-              </select>
-            </label>
-            <label>
-              Home TD
-              <input type="number" name="home_td" min="0" value="0" required />
-            </label>
-            <label>
-              Away TD
-              <input type="number" name="away_td" min="0" value="0" required />
-            </label>
-            <label>
-              Home CAS
-              <input type="number" name="home_cas" min="0" value="0" required />
-            </label>
-            <label>
-              Away CAS
-              <input type="number" name="away_cas" min="0" value="0" required />
-            </label>
-            <label>
-              Date
-              <input type="date" name="played_on" value="{{ today }}" required />
-            </label>
-            <button type="submit">Record Match</button>
-          </form>
-        </article>
+      <dialog id="add-season-dialog" class="modal">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close add season popup" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+        </form>
 
-        <article class="card">
-          <h2>Recent Matches</h2>
-          <ul class="list">
-            {% for match in matches %}
-              <li>
-                {{ match.played_on }}:
-                {{ team_names.get(match.home_team_id, '#' ~ match.home_team_id) }}
-                {{ match.home_td }}-{{ match.away_td }}
-                {{ team_names.get(match.away_team_id, '#' ~ match.away_team_id) }}
-                <span>(CAS {{ match.home_cas }}-{{ match.away_cas }})</span>
-              </li>
-            {% else %}
-              <li>No matches in this competition yet.</li>
-            {% endfor %}
-          </ul>
-        </article>
-      </section>
+        <h2>Add Season</h2>
+        <form method="post" action="{{ url_for('add_competition') }}" class="form-grid modal-form">
+          <label>
+            Season Name
+            <input name="name" required placeholder="Season 2" />
+          </label>
+          <label>
+            Color Theme
+            <select name="theme">
+              {% for theme_name in competition_themes %}
+                <option value="{{ theme_name }}">{{ theme_name|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit">Create Season</button>
+        </form>
+      </dialog>
 
       <section class="card">
-        <h2>Standings</h2>
+        <div class="section-head">
+          <h2>Standings</h2>
+          <button
+            type="button"
+            class="icon-btn"
+            title="Register team"
+            aria-label="Register team"
+            onclick="document.getElementById('add-team-dialog').showModal()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>Pos</th>
                 <th>Team</th>
+                <th>Coach</th>
                 <th>GP</th>
                 <th>W</th>
                 <th>D</th>
@@ -178,6 +131,7 @@
                 <tr>
                   <td>{{ loop.index }}</td>
                   <td>{{ row.team_name }}</td>
+                  <td>{{ team_coaches.get(row.team_id, "") if team_coaches.get(row.team_id, "") else "-" }}</td>
                   <td>{{ row.games }}</td>
                   <td>{{ row.wins }}</td>
                   <td>{{ row.draws }}</td>
@@ -188,12 +142,95 @@
                 </tr>
               {% else %}
                 <tr>
-                  <td colspan="9">No teams yet.</td>
+                  <td colspan="10">No teams yet.</td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+      </section>
+
+      <dialog id="add-team-dialog" class="modal">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close register team popup" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+
+        <h2>Register Team</h2>
+        <form method="post" action="{{ url_for('add_team') }}" class="form-grid modal-form">
+          <label>
+            Team Name
+            <input name="name" required placeholder="Middenheim Maulers" />
+          </label>
+          <label>
+            Coach
+            <input name="coach" placeholder="optional" />
+          </label>
+          <button type="submit">Create Team</button>
+        </form>
+      </dialog>
+
+      <section class="card">
+        <h2>Record Match</h2>
+        <form method="post" action="{{ url_for('add_match') }}" class="form-grid match-grid">
+          <label>
+            Home Team
+            <select name="home_team_id" required>
+              {% for team in teams %}
+                <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Away Team
+            <select name="away_team_id" required>
+              {% for team in teams %}
+                <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Home TD
+            <input type="number" name="home_td" min="0" value="0" required />
+          </label>
+          <label>
+            Away TD
+            <input type="number" name="away_td" min="0" value="0" required />
+          </label>
+          <label>
+            Home CAS
+            <input type="number" name="home_cas" min="0" value="0" required />
+          </label>
+          <label>
+            Away CAS
+            <input type="number" name="away_cas" min="0" value="0" required />
+          </label>
+          <label>
+            Date
+            <input type="date" name="played_on" value="{{ today }}" required />
+          </label>
+          <button type="submit">Record Match</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Recent Matches</h2>
+        <ul class="list">
+          {% for match in matches %}
+            <li>
+              {{ match.played_on }}:
+              {{ team_names.get(match.home_team_id, '#' ~ match.home_team_id) }}
+              {{ match.home_td }}-{{ match.away_td }}
+              {{ team_names.get(match.away_team_id, '#' ~ match.away_team_id) }}
+              <span>(CAS {{ match.home_cas }}-{{ match.away_cas }})</span>
+            </li>
+          {% else %}
+            <li>No matches in this competition yet.</li>
+          {% endfor %}
+        </ul>
       </section>
     </main>
   </body>

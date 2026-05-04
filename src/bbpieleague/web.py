@@ -5,9 +5,15 @@ from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match
+from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Team
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import LeagueData, load_league, save_league
+
+
+def _next_team_id(data: LeagueData) -> int:
+    if not data.teams:
+        return 1
+    return max(team.id for team in data.teams) + 1
 
 
 def _next_match_id(data: LeagueData) -> int:
@@ -62,6 +68,7 @@ def create_app() -> Flask:
         teams = sorted(data.teams, key=lambda item: item.id)
         competitions = sorted(data.competitions, key=lambda item: item.id)
         team_names = {team.id: team.name for team in teams}
+        team_coaches = {team.id: team.coach for team in teams}
 
         return render_template(
             "index.html",
@@ -72,6 +79,7 @@ def create_app() -> Flask:
             matches=matches,
             standings=standings,
             team_names=team_names,
+            team_coaches=team_coaches,
             today=date.today().isoformat(),
         )
 
@@ -79,7 +87,7 @@ def create_app() -> Flask:
     def add_competition():
         data = load_league()
         name = request.form.get("name", "").strip()
-        kind = request.form.get("kind", "season").strip()
+        kind = "season"
         theme = request.form.get("theme", "imperial").strip()
 
         if not name:
@@ -115,6 +123,27 @@ def create_app() -> Flask:
         data.active_competition_id = competition_id
         save_league(data)
         flash(f"Active competition set to #{competition_id}.", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/teams")
+    def add_team():
+        data = load_league()
+        name = request.form.get("name", "").strip()
+        coach = request.form.get("coach", "").strip()
+
+        if not name:
+            flash("Team name is required.", "error")
+            return redirect(url_for("index"))
+
+        # Keep names unique to avoid confusion in match entry dropdowns and standings.
+        if any(team.name.lower() == name.lower() for team in data.teams):
+            flash("A team with that name already exists.", "error")
+            return redirect(url_for("index"))
+
+        team = Team(id=_next_team_id(data), name=name, coach=coach)
+        data.teams.append(team)
+        save_league(data)
+        flash(f"Registered team #{team.id}: {team.name}", "success")
         return redirect(url_for("index"))
 
     @app.post("/matches")
