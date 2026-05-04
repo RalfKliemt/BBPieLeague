@@ -11,6 +11,8 @@ class Team:
     id: int
     name: str
     coach: str = ""
+    team_url: str = ""
+    coach_url: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)

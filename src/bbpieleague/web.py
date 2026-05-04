@@ -4,6 +4,7 @@ import os
 import secrets
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
@@ -84,6 +85,42 @@ def _teams_for_matches(teams: list[Team], matches: list[Match]) -> list[Team]:
     return [team for team in teams if team.id in season_team_ids]
 
 
+def _active_teams_for_competition(data: LeagueData, competition_id: int) -> list[Team]:
+    excluded_team_ids = set(data.competition_team_exclusions.get(competition_id, []))
+    return [team for team in data.teams if team.id not in excluded_team_ids]
+
+
+def _normalize_web_link(raw: str) -> str:
+    link = raw.strip()
+    if not link:
+        return ""
+
+    parsed = urlparse(link)
+    if not parsed.scheme and not parsed.netloc:
+        link = f"https://{link}"
+        parsed = urlparse(link)
+
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Links must be valid http(s) URLs.")
+
+    return link
+
+
+def _display_web_link(raw: str) -> str:
+    link = raw.strip()
+    if not link:
+        return ""
+
+    parsed = urlparse(link)
+    if not parsed.scheme and not parsed.netloc:
+        return f"https://{link}"
+
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return link
+
+    return ""
+
+
 def create_app() -> Flask:
     template_dir = Path(__file__).with_name("templates")
     static_dir = Path(__file__).with_name("static")
@@ -96,11 +133,18 @@ def create_app() -> Flask:
         active_competition = _active_competition(data)
         matches = sorted(_matches_for_active(data), key=lambda item: item.id, reverse=True)
         teams = sorted(data.teams, key=lambda item: item.id)
-        season_teams = _teams_for_matches(teams, matches)
-        standings = calculate_standings(season_teams, list(reversed(matches)))
+        excluded_team_ids = set(data.competition_team_exclusions.get(data.active_competition_id, []))
+        active_teams = sorted(
+            _active_teams_for_competition(data, data.active_competition_id),
+            key=lambda item: item.id,
+        )
+        removed_teams = [team for team in teams if team.id in excluded_team_ids]
+        standings = calculate_standings(active_teams, list(reversed(matches)))
         competitions = sorted(data.competitions, key=lambda item: item.id)
         team_names = {team.id: team.name for team in teams}
         team_coaches = {team.id: team.coach for team in teams}
+        team_urls = {team.id: _display_web_link(team.team_url) for team in teams}
+        coach_urls = {team.id: _display_web_link(team.coach_url) for team in teams}
 
         return render_template(
             "index.html",
@@ -109,10 +153,14 @@ def create_app() -> Flask:
             competitions=competitions,
             competition_themes=COMPETITION_THEME_CHOICES,
             teams=teams,
+            active_teams=active_teams,
+            removed_teams=removed_teams,
             matches=matches,
             standings=standings,
             team_names=team_names,
             team_coaches=team_coaches,
+            team_urls=team_urls,
+            coach_urls=coach_urls,
             today=date.today().isoformat(),
         )
 
@@ -206,6 +254,8 @@ def create_app() -> Flask:
         data = load_league()
         name = request.form.get("name", "").strip()
         coach = request.form.get("coach", "").strip()
+        team_url_raw = request.form.get("team_url", "")
+        coach_url_raw = request.form.get("coach_url", "")
 
         if not name:
             flash("Team name is required.", "error")
@@ -216,7 +266,14 @@ def create_app() -> Flask:
             flash("A team with that name already exists.", "error")
             return redirect(url_for("index"))
 
-        team = Team(id=_next_team_id(data), name=name, coach=coach)
+        try:
+            team_url = _normalize_web_link(team_url_raw)
+            coach_url = _normalize_web_link(coach_url_raw)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
+        team = Team(id=_next_team_id(data), name=name, coach=coach, team_url=team_url, coach_url=coach_url)
         data.teams.append(team)
         save_league(data)
         flash(f"Registered team #{team.id}: {team.name}", "success")
@@ -228,6 +285,8 @@ def create_app() -> Flask:
         team_id_raw = request.form.get("team_id", "").strip()
         name = request.form.get("name", "").strip()
         coach = request.form.get("coach", "").strip()
+        team_url_raw = request.form.get("team_url", "")
+        coach_url_raw = request.form.get("coach_url", "")
 
         try:
             team_id = int(team_id_raw)
@@ -248,11 +307,112 @@ def create_app() -> Flask:
             flash("A team with that name already exists.", "error")
             return redirect(url_for("index"))
 
+        try:
+            team_url = _normalize_web_link(team_url_raw)
+            coach_url = _normalize_web_link(coach_url_raw)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
         previous_name = team.name
         team.name = name
         team.coach = coach
+        team.team_url = team_url
+        team.coach_url = coach_url
         save_league(data)
         flash(f"Updated team #{team.id}: {previous_name} -> {team.name}", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/teams/delete")
+    def delete_team():
+        data = load_league()
+        team_id_raw = request.form.get("team_id", "").strip()
+        scope = request.form.get("scope", "season").strip().lower()
+
+        try:
+            team_id = int(team_id_raw)
+        except ValueError:
+            flash("Invalid team id.", "error")
+            return redirect(url_for("index"))
+
+        team = _find_team(data, team_id)
+        if team is None:
+            flash(f"Team #{team_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        if scope == "global":
+            data.teams = [current for current in data.teams if current.id != team_id]
+            data.players = [player for player in data.players if player.team_id != team_id]
+            data.matches = [
+                match
+                for match in data.matches
+                if match.home_team_id != team_id and match.away_team_id != team_id
+            ]
+
+            cleaned_exclusions: dict[int, list[int]] = {}
+            for competition_id, excluded in data.competition_team_exclusions.items():
+                remaining = [excluded_team_id for excluded_team_id in excluded if excluded_team_id != team_id]
+                if remaining:
+                    cleaned_exclusions[competition_id] = remaining
+            data.competition_team_exclusions = cleaned_exclusions
+
+            save_league(data)
+            flash(f"Deleted team #{team_id} globally.", "success")
+            return redirect(url_for("index"))
+
+        active_competition_id = data.active_competition_id
+        excluded = set(data.competition_team_exclusions.get(active_competition_id, []))
+        excluded.add(team_id)
+        data.competition_team_exclusions[active_competition_id] = sorted(excluded)
+
+        before_count = len(data.matches)
+        data.matches = [
+            match
+            for match in data.matches
+            if not (
+                _match_in_competition(match, active_competition_id)
+                and (match.home_team_id == team_id or match.away_team_id == team_id)
+            )
+        ]
+        removed_matches = before_count - len(data.matches)
+
+        save_league(data)
+        flash(
+            f"Removed team #{team_id} from active season and deleted {removed_matches} season matches.",
+            "success",
+        )
+        return redirect(url_for("index"))
+
+    @app.post("/teams/restore")
+    def restore_team():
+        data = load_league()
+        team_id_raw = request.form.get("team_id", "").strip()
+
+        try:
+            team_id = int(team_id_raw)
+        except ValueError:
+            flash("Invalid team id.", "error")
+            return redirect(url_for("index"))
+
+        team = _find_team(data, team_id)
+        if team is None:
+            flash(f"Team #{team_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        active_competition_id = data.active_competition_id
+        excluded = set(data.competition_team_exclusions.get(active_competition_id, []))
+        if team_id not in excluded:
+            flash(f"Team #{team_id} is already active in this season.", "success")
+            return redirect(url_for("index"))
+
+        excluded.remove(team_id)
+        if excluded:
+            data.competition_team_exclusions[active_competition_id] = sorted(excluded)
+        else:
+            data.competition_team_exclusions.pop(active_competition_id, None)
+
+        save_league(data)
+        flash(f"Re-added team #{team_id} to active season.", "success")
         return redirect(url_for("index"))
 
     @app.post("/matches")
@@ -280,6 +440,14 @@ def create_app() -> Flask:
 
         if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
             flash("Both teams must exist.", "error")
+            return redirect(url_for("index"))
+
+        active_team_ids = {
+            team.id
+            for team in _active_teams_for_competition(data, data.active_competition_id)
+        }
+        if home_team_id not in active_team_ids or away_team_id not in active_team_ids:
+            flash("Both teams must be active in this season.", "error")
             return redirect(url_for("index"))
 
         try:
@@ -338,6 +506,14 @@ def create_app() -> Flask:
 
         if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
             flash("Both teams must exist.", "error")
+            return redirect(url_for("index"))
+
+        active_team_ids = {
+            team.id
+            for team in _active_teams_for_competition(data, data.active_competition_id)
+        }
+        if home_team_id not in active_team_ids or away_team_id not in active_team_ids:
+            flash("Both teams must be active in this season.", "error")
             return redirect(url_for("index"))
 
         try:

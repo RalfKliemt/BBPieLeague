@@ -353,6 +353,17 @@ button:hover {
   filter: saturate(1.1);
 }
 
+.standings-link {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration-color: rgba(18, 60, 150, 0.45);
+  text-underline-offset: 2px;
+}
+
+.standings-link:hover {
+  color: var(--blue-deep);
+}
+
 .danger-btn {
   background: linear-gradient(180deg, #8a101f 0%, #610a15 100%);
 }
@@ -365,6 +376,15 @@ button:hover {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.6rem;
+}
+
+.inline-action-form {
+  margin: 0;
+}
+
+.compact-btn {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.9rem;
 }
 
 .visually-hidden {

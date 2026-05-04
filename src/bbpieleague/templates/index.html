@@ -134,6 +134,17 @@
             <button
               type="button"
               class="icon-btn"
+              title="Season team management"
+              aria-label="Season team management"
+              onclick="document.getElementById('season-team-management-dialog').showModal()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
               title="Manage team"
               aria-label="Manage team"
               onclick="document.getElementById('edit-team-dialog').showModal()"
@@ -175,8 +186,25 @@
               {% for row in standings %}
                 <tr>
                   <td>{{ loop.index }}</td>
-                  <td>{{ row.team_name }}</td>
-                  <td>{{ team_coaches.get(row.team_id, "") if team_coaches.get(row.team_id, "") else "-" }}</td>
+                  <td>
+                    {% if team_urls.get(row.team_id, "") %}
+                      <a class="standings-link" href="{{ team_urls.get(row.team_id) }}" target="_blank" rel="noopener noreferrer">{{ row.team_name }}</a>
+                    {% else %}
+                      {{ row.team_name }}
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% set coach_name = team_coaches.get(row.team_id, "") %}
+                    {% if coach_name %}
+                      {% if coach_urls.get(row.team_id, "") %}
+                        <a class="standings-link" href="{{ coach_urls.get(row.team_id) }}" target="_blank" rel="noopener noreferrer">{{ coach_name }}</a>
+                      {% else %}
+                        {{ coach_name }}
+                      {% endif %}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
                   <td>{{ row.games }}</td>
                   <td>{{ row.wins }}</td>
                   <td>{{ row.draws }}</td>
@@ -194,6 +222,70 @@
           </table>
         </div>
       </section>
+
+      <dialog id="season-team-management-dialog" class="modal modal-wide">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close season team management popup" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+
+        <h2>Season Team Management</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Coach</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for team in teams %}
+                {% set is_removed = team in removed_teams %}
+                <tr>
+                  <td>{{ team.name }}</td>
+                  <td>{{ team.coach if team.coach else "-" }}</td>
+                  <td>
+                    {% if is_removed %}
+                      Removed
+                    {% else %}
+                      Active
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if is_removed %}
+                      <form method="post" action="{{ url_for('restore_team') }}" class="inline-action-form">
+                        <input type="hidden" name="team_id" value="{{ team.id }}" />
+                        <button type="submit" class="compact-btn">Re-add To Season</button>
+                      </form>
+                    {% else %}
+                      <form method="post" action="{{ url_for('delete_team') }}" class="inline-action-form">
+                        <input type="hidden" name="team_id" value="{{ team.id }}" />
+                        <input type="hidden" name="scope" value="season" />
+                        <button
+                          type="submit"
+                          class="compact-btn danger-btn"
+                          onclick="return confirm('Remove this team from the active season? Active-season matches for this team will be deleted.')"
+                        >
+                          Remove From Season
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="4">No teams yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </dialog>
 
       <dialog id="add-team-dialog" class="modal">
         <form method="dialog" class="modal-close-row">
@@ -214,6 +306,14 @@
             Coach
             <input name="coach" placeholder="optional" />
           </label>
+          <label>
+            Team Link
+            <input name="team_url" type="text" placeholder="https://example.com/team or www.example.com/team" />
+          </label>
+          <label>
+            Coach Link
+            <input name="coach_url" type="text" placeholder="https://example.com/coach or www.example.com/coach" />
+          </label>
           <button type="submit">Create Team</button>
         </form>
       </dialog>
@@ -233,7 +333,7 @@
             Team
             <select name="team_id" id="edit-team-id" required>
               {% for team in teams %}
-                <option value="{{ team.id }}" data-name="{{ team.name }}" data-coach="{{ team.coach }}">
+                <option value="{{ team.id }}" data-name="{{ team.name }}" data-coach="{{ team.coach }}" data-team-url="{{ team.team_url }}" data-coach-url="{{ team.coach_url }}">
                   #{{ team.id }} {{ team.name }}
                 </option>
               {% endfor %}
@@ -247,7 +347,27 @@
             Coach
             <input name="coach" id="edit-team-coach" placeholder="optional" />
           </label>
-          <button type="submit">Save Team</button>
+          <label>
+            Team Link
+            <input name="team_url" id="edit-team-url" type="text" placeholder="https://example.com/team or www.example.com/team" />
+          </label>
+          <label>
+            Coach Link
+            <input name="coach_url" id="edit-coach-url" type="text" placeholder="https://example.com/coach or www.example.com/coach" />
+          </label>
+          <div class="form-actions">
+            <button type="submit">Save Team</button>
+            <button
+              type="submit"
+              class="danger-btn"
+              formaction="{{ url_for('delete_team') }}"
+              formmethod="post"
+              onclick="return confirm('Remove this team from the active season? Active-season matches for this team will be deleted.')"
+            >
+              Remove From Season
+            </button>
+          </div>
+          <input type="hidden" name="scope" value="season" />
         </form>
       </dialog>
 
@@ -271,7 +391,7 @@
           <label>
             Home Team
             <select name="home_team_id" required>
-              {% for team in teams %}
+              {% for team in active_teams %}
                 <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
               {% endfor %}
             </select>
@@ -279,7 +399,7 @@
           <label>
             Away Team
             <select name="away_team_id" required>
-              {% for team in teams %}
+              {% for team in active_teams %}
                 <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
               {% endfor %}
             </select>
@@ -342,7 +462,7 @@
           <label>
             Home Team
             <select name="home_team_id" id="edit-match-home-team" required>
-              {% for team in teams %}
+              {% for team in active_teams %}
                 <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
               {% endfor %}
             </select>
@@ -350,7 +470,7 @@
           <label>
             Away Team
             <select name="away_team_id" id="edit-match-away-team" required>
-              {% for team in teams %}
+              {% for team in active_teams %}
                 <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
               {% endfor %}
             </select>
@@ -416,6 +536,8 @@
         const teamSelect = document.getElementById("edit-team-id");
         const teamNameInput = document.getElementById("edit-team-name");
         const coachInput = document.getElementById("edit-team-coach");
+        const teamUrlInput = document.getElementById("edit-team-url");
+        const coachUrlInput = document.getElementById("edit-coach-url");
         const seasonSelect = document.getElementById("edit-season-id");
         const seasonNameInput = document.getElementById("edit-season-name");
         const seasonDefaultInput = document.getElementById("edit-season-default");
@@ -428,7 +550,7 @@
         const matchAwayCas = document.getElementById("edit-match-away-cas");
         const matchPlayedOn = document.getElementById("edit-match-played-on");
 
-        if (!teamSelect || !teamNameInput || !coachInput) {
+        if (!teamSelect || !teamNameInput || !coachInput || !teamUrlInput || !coachUrlInput) {
           return;
         }
 
@@ -441,6 +563,8 @@
           }
           teamNameInput.value = selected.dataset.name || "";
           coachInput.value = selected.dataset.coach || "";
+          teamUrlInput.value = selected.dataset.teamUrl || "";
+          coachUrlInput.value = selected.dataset.coachUrl || "";
         };
 
         teamSelect.addEventListener("change", syncTeamFields);

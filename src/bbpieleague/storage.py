@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from bbpieleague.models import Competition, Match, Player, Team
@@ -19,6 +19,7 @@ class LeagueData:
     active_competition_id: int
     matches: list[Match]
     default_competition_id: int = DEFAULT_COMPETITION_ID
+    competition_team_exclusions: dict[int, list[int]] = field(default_factory=dict)
 
 
 def get_data_path() -> Path:
@@ -37,6 +38,7 @@ def load_league(path: Path | None = None) -> LeagueData:
             active_competition_id=DEFAULT_COMPETITION_ID,
             matches=[],
             default_competition_id=DEFAULT_COMPETITION_ID,
+            competition_team_exclusions={},
         )
 
     with data_path.open("r", encoding="utf-8") as handle:
@@ -64,6 +66,29 @@ def load_league(path: Path | None = None) -> LeagueData:
         active_competition_id = default_competition_id
 
     matches = [Match(**item) for item in payload.get("matches", [])]
+
+    raw_exclusions = payload.get("competition_team_exclusions", {})
+    competition_team_exclusions: dict[int, list[int]] = {}
+    for raw_competition_id, raw_team_ids in raw_exclusions.items():
+        try:
+            competition_id = int(raw_competition_id)
+        except (TypeError, ValueError):
+            continue
+
+        if competition_id not in competition_ids:
+            continue
+
+        team_ids: list[int] = []
+        for raw_team_id in raw_team_ids if isinstance(raw_team_ids, list) else []:
+            try:
+                team_id = int(raw_team_id)
+            except (TypeError, ValueError):
+                continue
+            team_ids.append(team_id)
+
+        if team_ids:
+            competition_team_exclusions[competition_id] = sorted(set(team_ids))
+
     return LeagueData(
         teams=teams,
         players=players,
@@ -71,6 +96,7 @@ def load_league(path: Path | None = None) -> LeagueData:
         active_competition_id=active_competition_id,
         matches=matches,
         default_competition_id=default_competition_id,
+        competition_team_exclusions=competition_team_exclusions,
     )
 
 
@@ -84,6 +110,7 @@ def save_league(data: LeagueData, path: Path | None = None) -> Path:
         "competitions": [competition.to_dict() for competition in data.competitions],
         "active_competition_id": data.active_competition_id,
         "default_competition_id": data.default_competition_id,
+        "competition_team_exclusions": data.competition_team_exclusions,
         "matches": [match.to_dict() for match in data.matches],
     }
     with data_path.open("w", encoding="utf-8") as handle:
