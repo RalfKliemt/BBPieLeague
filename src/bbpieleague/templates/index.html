@@ -248,7 +248,21 @@
       </dialog>
 
       <section class="card">
-        <h2>Record Match</h2>
+        <div class="section-head">
+          <h2>Record Match</h2>
+          <button
+            type="button"
+            class="icon-btn"
+            title="Edit match"
+            aria-label="Edit match"
+            {% if not matches %}disabled{% endif %}
+            onclick="document.getElementById('edit-match-dialog').showModal()"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 20h4l10.5-10.5a1.4 1.4 0 0 0 0-2L16.5 5a1.4 1.4 0 0 0-2 0L4 15.5V20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </div>
         <form method="post" action="{{ url_for('add_match') }}" class="form-grid match-grid">
           <label>
             Home Team
@@ -290,6 +304,91 @@
         </form>
       </section>
 
+      <dialog id="edit-match-dialog" class="modal modal-wide">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close edit match popup" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+
+        <h2>Edit Match</h2>
+        {% if matches %}
+        <form method="post" action="{{ url_for('update_match') }}" class="form-grid modal-form match-grid" id="edit-match-form">
+          <label class="full-row">
+            Match
+            <select name="match_id" id="edit-match-id" required>
+              {% for match in matches %}
+                <option
+                  value="{{ match.id }}"
+                  data-home-team-id="{{ match.home_team_id }}"
+                  data-away-team-id="{{ match.away_team_id }}"
+                  data-home-td="{{ match.home_td }}"
+                  data-away-td="{{ match.away_td }}"
+                  data-home-cas="{{ match.home_cas }}"
+                  data-away-cas="{{ match.away_cas }}"
+                  data-played-on="{{ match.played_on }}"
+                >
+                  #{{ match.id }} {{ match.played_on }}: {{ team_names.get(match.home_team_id, '#' ~ match.home_team_id) }} {{ match.home_td }}-{{ match.away_td }} {{ team_names.get(match.away_team_id, '#' ~ match.away_team_id) }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Home Team
+            <select name="home_team_id" id="edit-match-home-team" required>
+              {% for team in teams %}
+                <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Away Team
+            <select name="away_team_id" id="edit-match-away-team" required>
+              {% for team in teams %}
+                <option value="{{ team.id }}">#{{ team.id }} {{ team.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Home TD
+            <input type="number" name="home_td" id="edit-match-home-td" min="0" required />
+          </label>
+          <label>
+            Away TD
+            <input type="number" name="away_td" id="edit-match-away-td" min="0" required />
+          </label>
+          <label>
+            Home CAS
+            <input type="number" name="home_cas" id="edit-match-home-cas" min="0" required />
+          </label>
+          <label>
+            Away CAS
+            <input type="number" name="away_cas" id="edit-match-away-cas" min="0" required />
+          </label>
+          <label>
+            Date
+            <input type="date" name="played_on" id="edit-match-played-on" required />
+          </label>
+          <div class="form-actions full-row">
+            <button type="submit">Save Match</button>
+            <button
+              type="submit"
+              class="danger-btn"
+              formaction="{{ url_for('delete_match') }}"
+              formmethod="post"
+              onclick="return confirm('Delete this match? This cannot be undone.')"
+            >
+              Delete Match
+            </button>
+          </div>
+        </form>
+        {% else %}
+        <p>No matches in the active season yet.</p>
+        {% endif %}
+      </dialog>
+
       <section class="card">
         <h2>Recent Matches</h2>
         <ul class="list">
@@ -315,6 +414,14 @@
         const coachInput = document.getElementById("edit-team-coach");
         const seasonSelect = document.getElementById("edit-season-id");
         const seasonNameInput = document.getElementById("edit-season-name");
+        const matchSelect = document.getElementById("edit-match-id");
+        const matchHomeTeam = document.getElementById("edit-match-home-team");
+        const matchAwayTeam = document.getElementById("edit-match-away-team");
+        const matchHomeTd = document.getElementById("edit-match-home-td");
+        const matchAwayTd = document.getElementById("edit-match-away-td");
+        const matchHomeCas = document.getElementById("edit-match-home-cas");
+        const matchAwayCas = document.getElementById("edit-match-away-cas");
+        const matchPlayedOn = document.getElementById("edit-match-played-on");
 
         if (!teamSelect || !teamNameInput || !coachInput) {
           return;
@@ -346,6 +453,34 @@
 
           seasonSelect.addEventListener("change", syncSeasonFields);
           syncSeasonFields();
+        }
+
+        if (
+          matchSelect &&
+          matchHomeTeam &&
+          matchAwayTeam &&
+          matchHomeTd &&
+          matchAwayTd &&
+          matchHomeCas &&
+          matchAwayCas &&
+          matchPlayedOn
+        ) {
+          const syncMatchFields = () => {
+            const selected = matchSelect.options[matchSelect.selectedIndex];
+            if (!selected) {
+              return;
+            }
+            matchHomeTeam.value = selected.dataset.homeTeamId || "";
+            matchAwayTeam.value = selected.dataset.awayTeamId || "";
+            matchHomeTd.value = selected.dataset.homeTd || "0";
+            matchAwayTd.value = selected.dataset.awayTd || "0";
+            matchHomeCas.value = selected.dataset.homeCas || "0";
+            matchAwayCas.value = selected.dataset.awayCas || "0";
+            matchPlayedOn.value = selected.dataset.playedOn || "";
+          };
+
+          matchSelect.addEventListener("change", syncMatchFields);
+          syncMatchFields();
         }
       })();
     </script>

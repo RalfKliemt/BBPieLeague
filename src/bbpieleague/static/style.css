@@ -227,6 +227,10 @@ body {
   color: var(--ink);
 }
 
+.modal-wide {
+  width: min(96vw, 720px);
+}
+
 .modal::backdrop {
   background: rgba(4, 12, 28, 0.48);
 }
@@ -294,9 +298,15 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.match-grid button,
+.match-grid .full-row,
 .match-grid label:last-of-type {
   grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
 }
 
 label {
@@ -341,6 +351,10 @@ button:hover {
   transform: translateY(-1px);
   box-shadow: 0 7px 12px rgba(10, 19, 37, 0.25);
   filter: saturate(1.1);
+}
+
+.danger-btn {
+  background: linear-gradient(180deg, #8a101f 0%, #610a15 100%);
 }
 
 .theme-pill {

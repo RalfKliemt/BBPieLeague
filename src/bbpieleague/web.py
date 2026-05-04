@@ -45,6 +45,13 @@ def _find_team(data: LeagueData, team_id: int) -> Team | None:
     return None
 
 
+def _find_match(data: LeagueData, match_id: int) -> Match | None:
+    for match in data.matches:
+        if match.id == match_id:
+            return match
+    return None
+
+
 def _find_competition(data: LeagueData, competition_id: int) -> Competition | None:
     for competition in data.competitions:
         if competition.id == competition_id:
@@ -281,6 +288,96 @@ def create_app() -> Flask:
         data.matches.append(match)
         save_league(data)
         flash(f"Recorded match #{match.id} in active competition.", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/matches/update")
+    def update_match():
+        data = load_league()
+
+        def int_field(name: str) -> int:
+            raw = request.form.get(name, "").strip()
+            if raw == "":
+                raise ValueError(f"{name} is required")
+            return int(raw)
+
+        try:
+            match_id = int_field("match_id")
+            home_team_id = int_field("home_team_id")
+            away_team_id = int_field("away_team_id")
+            home_td = int_field("home_td")
+            away_td = int_field("away_td")
+            home_cas = int_field("home_cas")
+            away_cas = int_field("away_cas")
+        except ValueError as exc:
+            flash(f"Invalid match input: {exc}", "error")
+            return redirect(url_for("index"))
+
+        played_on = request.form.get("played_on", date.today().isoformat()).strip()
+
+        match = _find_match(data, match_id)
+        if match is None:
+            flash(f"Match #{match_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        if not _match_in_competition(match, data.active_competition_id):
+            flash("You can only edit matches from the active competition.", "error")
+            return redirect(url_for("index"))
+
+        if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
+            flash("Both teams must exist.", "error")
+            return redirect(url_for("index"))
+
+        try:
+            # Re-validate with the model rules before mutating stored data.
+            Match(
+                id=match.id,
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                home_td=home_td,
+                away_td=away_td,
+                home_cas=home_cas,
+                away_cas=away_cas,
+                competition_id=match.competition_id,
+                played_on=played_on,
+            )
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("index"))
+
+        match.home_team_id = home_team_id
+        match.away_team_id = away_team_id
+        match.home_td = home_td
+        match.away_td = away_td
+        match.home_cas = home_cas
+        match.away_cas = away_cas
+        match.played_on = played_on
+        save_league(data)
+        flash(f"Updated match #{match.id} in active competition.", "success")
+        return redirect(url_for("index"))
+
+    @app.post("/matches/delete")
+    def delete_match():
+        data = load_league()
+        match_id_raw = request.form.get("match_id", "").strip()
+
+        try:
+            match_id = int(match_id_raw)
+        except ValueError:
+            flash("Invalid match id.", "error")
+            return redirect(url_for("index"))
+
+        match = _find_match(data, match_id)
+        if match is None:
+            flash(f"Match #{match_id} does not exist.", "error")
+            return redirect(url_for("index"))
+
+        if not _match_in_competition(match, data.active_competition_id):
+            flash("You can only delete matches from the active competition.", "error")
+            return redirect(url_for("index"))
+
+        data.matches = [existing for existing in data.matches if existing.id != match_id]
+        save_league(data)
+        flash(f"Deleted match #{match_id} from active competition.", "success")
         return redirect(url_for("index"))
 
     return app
