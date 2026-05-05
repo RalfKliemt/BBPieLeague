@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from bbpieleague.naf import extract_naf_coach_number_from_url
+
 
 COMPETITION_THEME_CHOICES = ("imperial", "chaos", "orc", "undead")
 
@@ -11,8 +13,14 @@ class Team:
     id: int
     name: str
     coach: str = ""
+    coach_naf_number: str = ""
     team_url: str = ""
     coach_url: str = ""
+
+    def __post_init__(self) -> None:
+        self.coach_naf_number = self.coach_naf_number.strip()
+        if not self.coach_naf_number and self.coach_url:
+            self.coach_naf_number = extract_naf_coach_number_from_url(self.coach_url)
 
     def to_dict(self) -> dict:
         return asdict(self)

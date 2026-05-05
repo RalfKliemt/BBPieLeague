@@ -303,16 +303,12 @@
             <input name="name" required placeholder="Middenheim Maulers" />
           </label>
           <label>
-            Coach
-            <input name="coach" placeholder="optional" />
-          </label>
-          <label>
             Team Link
             <input name="team_url" type="text" placeholder="https://example.com/team or www.example.com/team" />
           </label>
           <label>
-            Coach Link
-            <input name="coach_url" type="text" placeholder="https://example.com/coach or www.example.com/coach" />
+            Coach NAF Number
+            <input name="coach_naf_number" inputmode="numeric" pattern="[0-9]*" placeholder="42023" />
           </label>
           <button type="submit">Create Team</button>
         </form>
@@ -333,7 +329,7 @@
             Team
             <select name="team_id" id="edit-team-id" required>
               {% for team in teams %}
-                <option value="{{ team.id }}" data-name="{{ team.name }}" data-coach="{{ team.coach }}" data-team-url="{{ team.team_url }}" data-coach-url="{{ team.coach_url }}">
+                <option value="{{ team.id }}" data-name="{{ team.name }}" data-coach="{{ team.coach }}" data-coach-naf-number="{{ team.coach_naf_number }}" data-team-url="{{ team.team_url }}">
                   #{{ team.id }} {{ team.name }}
                 </option>
               {% endfor %}
@@ -345,15 +341,15 @@
           </label>
           <label>
             Coach
-            <input name="coach" id="edit-team-coach" placeholder="optional" />
+            <input id="edit-team-coach" placeholder="Fetched from NAF profile" readonly />
           </label>
           <label>
             Team Link
             <input name="team_url" id="edit-team-url" type="text" placeholder="https://example.com/team or www.example.com/team" />
           </label>
           <label>
-            Coach Link
-            <input name="coach_url" id="edit-coach-url" type="text" placeholder="https://example.com/coach or www.example.com/coach" />
+            Coach NAF Number
+            <input name="coach_naf_number" id="edit-coach-naf-number" inputmode="numeric" pattern="[0-9]*" placeholder="42023" />
           </label>
           <div class="form-actions">
             <button type="submit">Save Team</button>
@@ -537,7 +533,7 @@
         const teamNameInput = document.getElementById("edit-team-name");
         const coachInput = document.getElementById("edit-team-coach");
         const teamUrlInput = document.getElementById("edit-team-url");
-        const coachUrlInput = document.getElementById("edit-coach-url");
+        const coachNafNumberInput = document.getElementById("edit-coach-naf-number");
         const seasonSelect = document.getElementById("edit-season-id");
         const seasonNameInput = document.getElementById("edit-season-name");
         const seasonDefaultInput = document.getElementById("edit-season-default");
@@ -550,7 +546,7 @@
         const matchAwayCas = document.getElementById("edit-match-away-cas");
         const matchPlayedOn = document.getElementById("edit-match-played-on");
 
-        if (!teamSelect || !teamNameInput || !coachInput || !teamUrlInput || !coachUrlInput) {
+        if (!teamSelect || !teamNameInput || !coachInput || !teamUrlInput || !coachNafNumberInput) {
           return;
         }
 
@@ -559,12 +555,14 @@
           if (!selected) {
             teamNameInput.value = "";
             coachInput.value = "";
+            teamUrlInput.value = "";
+            coachNafNumberInput.value = "";
             return;
           }
           teamNameInput.value = selected.dataset.name || "";
           coachInput.value = selected.dataset.coach || "";
           teamUrlInput.value = selected.dataset.teamUrl || "";
-          coachUrlInput.value = selected.dataset.coachUrl || "";
+          coachNafNumberInput.value = selected.dataset.coachNafNumber || "";
         };
 
         teamSelect.addEventListener("change", syncTeamFields);

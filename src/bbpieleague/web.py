@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Team
+from bbpieleague.naf import build_naf_coach_url, fetch_naf_coach_name, normalize_naf_coach_number
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league, save_league
 
@@ -121,6 +122,31 @@ def _display_web_link(raw: str) -> str:
     return ""
 
 
+def _resolve_coach_profile(raw_naf_number: str, existing_team: Team | None = None) -> tuple[str, str, str, str | None]:
+    normalized_naf_number = normalize_naf_coach_number(raw_naf_number)
+    if raw_naf_number.strip() and not normalized_naf_number:
+        raise ValueError("Coach NAF number must be numeric or a valid NAF coach URL.")
+
+    if not normalized_naf_number:
+        coach_name = existing_team.coach if existing_team is not None else ""
+        return coach_name, "", "", None
+
+    coach_url = build_naf_coach_url(normalized_naf_number)
+    coach_name = existing_team.coach if existing_team is not None else ""
+    warning: str | None = None
+    try:
+        fetched_name = fetch_naf_coach_name(normalized_naf_number)
+    except ValueError as exc:
+        warning = str(exc)
+    else:
+        if fetched_name:
+            coach_name = fetched_name
+        else:
+            warning = "Coach name could not be read from the NAF profile page."
+
+    return coach_name, normalized_naf_number, coach_url, warning
+
+
 def create_app() -> Flask:
     template_dir = Path(__file__).with_name("templates")
     static_dir = Path(__file__).with_name("static")
@@ -144,7 +170,10 @@ def create_app() -> Flask:
         team_names = {team.id: team.name for team in teams}
         team_coaches = {team.id: team.coach for team in teams}
         team_urls = {team.id: _display_web_link(team.team_url) for team in teams}
-        coach_urls = {team.id: _display_web_link(team.coach_url) for team in teams}
+        coach_urls = {
+            team.id: _display_web_link(build_naf_coach_url(team.coach_naf_number) if team.coach_naf_number else team.coach_url)
+            for team in teams
+        }
 
         return render_template(
             "index.html",
@@ -253,9 +282,8 @@ def create_app() -> Flask:
     def add_team():
         data = load_league()
         name = request.form.get("name", "").strip()
-        coach = request.form.get("coach", "").strip()
+        coach_naf_number_raw = request.form.get("coach_naf_number", "")
         team_url_raw = request.form.get("team_url", "")
-        coach_url_raw = request.form.get("coach_url", "")
 
         if not name:
             flash("Team name is required.", "error")
@@ -268,14 +296,23 @@ def create_app() -> Flask:
 
         try:
             team_url = _normalize_web_link(team_url_raw)
-            coach_url = _normalize_web_link(coach_url_raw)
+            coach, coach_naf_number, coach_url, warning = _resolve_coach_profile(coach_naf_number_raw)
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("index"))
 
-        team = Team(id=_next_team_id(data), name=name, coach=coach, team_url=team_url, coach_url=coach_url)
+        team = Team(
+            id=_next_team_id(data),
+            name=name,
+            coach=coach,
+            coach_naf_number=coach_naf_number,
+            team_url=team_url,
+            coach_url=coach_url,
+        )
         data.teams.append(team)
         save_league(data)
+        if warning:
+            flash(warning, "warning")
         flash(f"Registered team #{team.id}: {team.name}", "success")
         return redirect(url_for("index"))
 
@@ -284,9 +321,8 @@ def create_app() -> Flask:
         data = load_league()
         team_id_raw = request.form.get("team_id", "").strip()
         name = request.form.get("name", "").strip()
-        coach = request.form.get("coach", "").strip()
+        coach_naf_number_raw = request.form.get("coach_naf_number", "")
         team_url_raw = request.form.get("team_url", "")
-        coach_url_raw = request.form.get("coach_url", "")
 
         try:
             team_id = int(team_id_raw)
@@ -309,7 +345,10 @@ def create_app() -> Flask:
 
         try:
             team_url = _normalize_web_link(team_url_raw)
-            coach_url = _normalize_web_link(coach_url_raw)
+            coach, coach_naf_number, coach_url, warning = _resolve_coach_profile(
+                coach_naf_number_raw,
+                existing_team=team,
+            )
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("index"))
@@ -317,9 +356,12 @@ def create_app() -> Flask:
         previous_name = team.name
         team.name = name
         team.coach = coach
+        team.coach_naf_number = coach_naf_number
         team.team_url = team_url
         team.coach_url = coach_url
         save_league(data)
+        if warning:
+            flash(warning, "warning")
         flash(f"Updated team #{team.id}: {previous_name} -> {team.name}", "success")
         return redirect(url_for("index"))
 

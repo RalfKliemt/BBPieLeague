@@ -29,7 +29,7 @@ bbpieleague init
 Add teams:
 
 ```bash
-bbpieleague add-team "Reikland Reavers" --coach "Griff"
+bbpieleague add-team "Reikland Reavers" --coach-naf-number 42023
 bbpieleague add-team "Orcland Smashers" --coach "Gorbad"
 ```
 
@@ -106,13 +106,14 @@ What you can do in the UI:
 - Add competitions and switch active competition
 - Pick a visual theme per competition (imperial, chaos, orc, undead)
 - Record matches in the active competition
+- Register teams with a NAF coach number and auto-generate the coach profile link
 - View recent matches and standings
 - View teams (read-only)
 
-Use CLI for team creation:
+CLI team creation also supports NAF coach numbers:
 
 ```bash
-bbpieleague add-team "Reikland Reavers" --coach "Griff"
+bbpieleague add-team "Reikland Reavers" --coach-naf-number 42023
 ```
 
 ## Data storage

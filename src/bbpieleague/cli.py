@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import date
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Player, Team
+from bbpieleague.naf import build_naf_coach_url, fetch_naf_coach_name, normalize_naf_coach_number
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league, save_league
 
@@ -18,6 +19,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_team_parser = sub.add_parser("add-team", help="Add a team")
     add_team_parser.add_argument("name", help="Team name")
     add_team_parser.add_argument("--coach", default="", help="Coach name")
+    add_team_parser.add_argument(
+        "--coach-naf-number",
+        default="",
+        help="NAF coach number used to generate the coach profile link",
+    )
 
     sub.add_parser("list-teams", help="List teams")
 
@@ -145,9 +151,23 @@ def cmd_init() -> int:
     return 0
 
 
-def cmd_add_team(name: str, coach: str) -> int:
+def cmd_add_team(name: str, coach: str, coach_naf_number: str) -> int:
     data = load_league()
-    team = Team(id=_next_team_id(data), name=name, coach=coach)
+    normalized_naf_number = normalize_naf_coach_number(coach_naf_number)
+    if coach_naf_number.strip() and not normalized_naf_number:
+        raise ValueError("Coach NAF number must be numeric or a valid NAF coach URL")
+
+    resolved_coach_name = coach.strip()
+    if normalized_naf_number and not resolved_coach_name:
+        resolved_coach_name = fetch_naf_coach_name(normalized_naf_number)
+
+    team = Team(
+        id=_next_team_id(data),
+        name=name,
+        coach=resolved_coach_name,
+        coach_naf_number=normalized_naf_number,
+        coach_url=build_naf_coach_url(normalized_naf_number),
+    )
     data.teams.append(team)
     save_league(data)
     print(f"Added team #{team.id}: {team.name}")
@@ -364,7 +384,11 @@ def main() -> int:
         if args.command == "init":
             return cmd_init()
         if args.command == "add-team":
-            return cmd_add_team(name=args.name, coach=args.coach)
+            return cmd_add_team(
+                name=args.name,
+                coach=args.coach,
+                coach_naf_number=args.coach_naf_number,
+            )
         if args.command == "list-teams":
             return cmd_list_teams()
         if args.command == "add-competition":
