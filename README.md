@@ -29,7 +29,7 @@ bbpieleague init
 Add teams:
 
 ```bash
-bbpieleague add-team "Reikland Reavers" --coach-naf-number 42023
+bbpieleague add-team "Reikland Reavers" --coach-naf-number 12345
 bbpieleague add-team "Orcland Smashers" --coach "Gorbad"
 ```
 
@@ -113,7 +113,7 @@ What you can do in the UI:
 CLI team creation also supports NAF coach numbers:
 
 ```bash
-bbpieleague add-team "Reikland Reavers" --coach-naf-number 42023
+bbpieleague add-team "Reikland Reavers" --coach-naf-number 12345
 ```
 
 ## Data storage
