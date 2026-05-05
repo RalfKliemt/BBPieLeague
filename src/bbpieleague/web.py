@@ -122,27 +122,38 @@ def _display_web_link(raw: str) -> str:
     return ""
 
 
-def _resolve_coach_profile(raw_naf_number: str, existing_team: Team | None = None) -> tuple[str, str, str, str | None]:
+def _resolve_coach_profile(
+    raw_naf_number: str,
+    requested_coach: str = "",
+    existing_team: Team | None = None,
+) -> tuple[str, str, str, str | None]:
     normalized_naf_number = normalize_naf_coach_number(raw_naf_number)
+    manual_coach = requested_coach.strip()
     if raw_naf_number.strip() and not normalized_naf_number:
         raise ValueError("Coach NAF number must be numeric or a valid NAF coach URL.")
 
     if not normalized_naf_number:
-        coach_name = existing_team.coach if existing_team is not None else ""
+        coach_name = manual_coach if manual_coach else (existing_team.coach if existing_team is not None else "")
         return coach_name, "", "", None
 
     coach_url = build_naf_coach_url(normalized_naf_number)
-    coach_name = existing_team.coach if existing_team is not None else ""
+    existing_coach = existing_team.coach if existing_team is not None else ""
+    coach_name = manual_coach if manual_coach else existing_coach
     warning: str | None = None
-    try:
-        fetched_name = fetch_naf_coach_name(normalized_naf_number)
-    except ValueError as exc:
-        warning = str(exc)
-    else:
-        if fetched_name:
-            coach_name = fetched_name
+
+    # If the submitted coach field changed, treat it as a manual override.
+    # Otherwise refresh from NAF whenever a NAF number is provided.
+    manual_override = bool(existing_team is not None and manual_coach and manual_coach != existing_coach)
+    if not manual_override:
+        try:
+            fetched_name = fetch_naf_coach_name(normalized_naf_number)
+        except ValueError as exc:
+            warning = str(exc)
         else:
-            warning = "Coach name could not be read from the NAF profile page."
+            if fetched_name:
+                coach_name = fetched_name
+            else:
+                warning = "Coach name could not be read from the NAF profile page."
 
     return coach_name, normalized_naf_number, coach_url, warning
 
@@ -282,6 +293,7 @@ def create_app() -> Flask:
     def add_team():
         data = load_league()
         name = request.form.get("name", "").strip()
+        coach_raw = request.form.get("coach", "")
         coach_naf_number_raw = request.form.get("coach_naf_number", "")
         team_url_raw = request.form.get("team_url", "")
 
@@ -296,7 +308,10 @@ def create_app() -> Flask:
 
         try:
             team_url = _normalize_web_link(team_url_raw)
-            coach, coach_naf_number, coach_url, warning = _resolve_coach_profile(coach_naf_number_raw)
+            coach, coach_naf_number, coach_url, warning = _resolve_coach_profile(
+                coach_naf_number_raw,
+                requested_coach=coach_raw,
+            )
         except ValueError as exc:
             flash(str(exc), "error")
             return redirect(url_for("index"))
@@ -321,6 +336,7 @@ def create_app() -> Flask:
         data = load_league()
         team_id_raw = request.form.get("team_id", "").strip()
         name = request.form.get("name", "").strip()
+        coach_raw = request.form.get("coach", "")
         coach_naf_number_raw = request.form.get("coach_naf_number", "")
         team_url_raw = request.form.get("team_url", "")
 
@@ -347,6 +363,7 @@ def create_app() -> Flask:
             team_url = _normalize_web_link(team_url_raw)
             coach, coach_naf_number, coach_url, warning = _resolve_coach_profile(
                 coach_naf_number_raw,
+                requested_coach=coach_raw,
                 existing_team=team,
             )
         except ValueError as exc:
