@@ -109,6 +109,7 @@ What you can do in the UI:
 - Register teams with a NAF coach number and auto-generate the coach profile link
 - View recent matches and standings
 - View teams (read-only)
+- Open an embedded DICED calculator popup; the app clones or fast-forwards `RalfKliemt/DICED` automatically into `data/integrations/diced/repo`
 
 CLI team creation also supports NAF coach numbers:
 

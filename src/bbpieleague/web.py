@@ -1,17 +1,201 @@
 from __future__ import annotations
 
+import importlib
 import os
 import secrets
+import subprocess
+import sys
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from flask import Flask, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, render_template_string, request, send_from_directory, url_for
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Team
 from bbpieleague.naf import build_naf_coach_url, fetch_naf_coach_name, normalize_naf_coach_number
 from bbpieleague.standings import calculate_standings
 from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league, save_league
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DICED_REPO_URL = "https://github.com/RalfKliemt/DICED.git"
+DICED_CACHE_DIR = PROJECT_ROOT / "data" / "integrations" / "diced"
+DICED_REPO_DIR = DICED_CACHE_DIR / "repo"
+DICED_EXAMPLES = ["224s3", "3++ 4+ 5+", "2+ 2d+ 4+", "2+, 3+, 4+"]
+
+
+def _run_git_command(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(cwd) if cwd is not None else None,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _summarize_command_failure(result: subprocess.CompletedProcess[str]) -> str:
+    details = (result.stderr or result.stdout or "git command failed").strip()
+    return details.splitlines()[-1] if details else "git command failed"
+
+
+def _ensure_diced_repo() -> dict[str, object]:
+    DICED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    git_check = _run_git_command(["--version"])
+    if git_check.returncode != 0:
+        return {
+            "ready": False,
+            "action": "unavailable",
+            "repo_dir": str(DICED_REPO_DIR),
+            "error": "git is not available in PATH.",
+        }
+
+    if DICED_REPO_DIR.exists() and not (DICED_REPO_DIR / ".git").exists():
+        return {
+            "ready": False,
+            "action": "unavailable",
+            "repo_dir": str(DICED_REPO_DIR),
+            "error": f"{DICED_REPO_DIR} exists but is not a git checkout.",
+        }
+
+    if not DICED_REPO_DIR.exists():
+        clone_result = _run_git_command(["clone", "--depth", "1", DICED_REPO_URL, str(DICED_REPO_DIR)])
+        if clone_result.returncode != 0:
+            return {
+                "ready": False,
+                "action": "clone-failed",
+                "repo_dir": str(DICED_REPO_DIR),
+                "error": _summarize_command_failure(clone_result),
+            }
+
+        return {
+            "ready": True,
+            "action": "cloned",
+            "repo_dir": str(DICED_REPO_DIR),
+            "error": "",
+        }
+
+    pull_result = _run_git_command(["pull", "--ff-only"], cwd=DICED_REPO_DIR)
+    if pull_result.returncode != 0:
+        return {
+            "ready": False,
+            "action": "update-failed",
+            "repo_dir": str(DICED_REPO_DIR),
+            "error": _summarize_command_failure(pull_result),
+        }
+
+    return {
+        "ready": True,
+        "action": "updated",
+        "repo_dir": str(DICED_REPO_DIR),
+        "error": "",
+    }
+
+
+def _adapt_diced_template(template_source: str) -> str:
+    template_source = template_source.replace(
+        "{{ url_for('static', filename='style.css') }}",
+        "{{ url_for('diced_static', filename='style.css') }}",
+    )
+    template_source = template_source.replace(
+        '<form class="sequence-form" method="get" action="/">',
+        '<form class="sequence-form" method="get" action="{{ url_for(\'diced_page\') }}">',
+    )
+    template_source = template_source.replace(
+        '<a class="example-chip" href="/?sequence={{ example|urlencode }}">{{ example }}</a>',
+        '<a class="example-chip" href="{{ url_for(\'diced_page\', sequence=example) }}">{{ example }}</a>',
+    )
+    return template_source
+
+
+@lru_cache(maxsize=1)
+def _load_diced_integration() -> dict[str, object]:
+    status = _ensure_diced_repo()
+    integration: dict[str, object] = {
+        "ready": bool(status.get("ready")),
+        "action": status.get("action", "unknown"),
+        "error": status.get("error", ""),
+        "repo_dir": Path(status.get("repo_dir", DICED_REPO_DIR)),
+    }
+
+    if not integration["ready"]:
+        return integration
+
+    repo_dir = Path(integration["repo_dir"])
+    src_dir = repo_dir / "src"
+    template_path = src_dir / "diced" / "templates" / "index.html"
+    static_dir = src_dir / "diced" / "static"
+
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+
+    try:
+        importlib.invalidate_caches()
+        diced_core = importlib.import_module("diced.core")
+        diced_web = importlib.import_module("diced.web")
+        template_source = _adapt_diced_template(template_path.read_text(encoding="utf-8"))
+    except (ImportError, OSError) as exc:
+        integration["ready"] = False
+        integration["error"] = str(exc)
+        return integration
+
+    integration.update(
+        {
+            "build_result_view": diced_web.build_result_view,
+            "calculator": diced_core.RollSequenceCalculator(),
+            "parse_roll_sequence": diced_core.parse_roll_sequence,
+            "static_dir": static_dir,
+            "template_source": template_source,
+        }
+    )
+    return integration
+
+
+def _diced_status_view() -> dict[str, object]:
+    integration = _load_diced_integration()
+    return {
+        "ready": bool(integration.get("ready")),
+        "action": integration.get("action", "unknown"),
+        "error": integration.get("error", ""),
+    }
+
+
+def _render_diced_unavailable(status: dict[str, object], status_code: int = 503) -> tuple[str, int]:
+    error = status.get("error", "Unknown integration error.")
+    return (
+        render_template_string(
+            """<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>DICED unavailable</title>
+    <style>
+      body { font-family: Helvetica, Arial, sans-serif; margin: 0; padding: 1.5rem; background: #f4f8ff; color: #0c1733; }
+      main { max-width: 42rem; margin: 0 auto; background: #fff; border: 2px solid #d2deff; border-radius: 14px; padding: 1.25rem; }
+      h1 { margin-top: 0; }
+      p { line-height: 1.5; }
+      code { font-family: Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>DICED is unavailable</h1>
+      <p>The integration could not be prepared automatically.</p>
+      <p><strong>Reason:</strong> {{ error }}</p>
+      <p><strong>Action:</strong> {{ action }}</p>
+      <p>The main league app is still available.</p>
+    </main>
+  </body>
+</html>
+""",
+            error=error,
+            action=status.get("action", "unknown"),
+        ),
+        status_code,
+    )
 
 
 def _next_team_id(data: LeagueData) -> int:
@@ -167,6 +351,7 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         data = load_league()
+        diced_integration = _diced_status_view()
         active_competition = _active_competition(data)
         matches = sorted(_matches_for_active(data), key=lambda item: item.id, reverse=True)
         teams = sorted(data.teams, key=lambda item: item.id)
@@ -202,7 +387,46 @@ def create_app() -> Flask:
             team_urls=team_urls,
             coach_urls=coach_urls,
             today=date.today().isoformat(),
+            diced_integration=diced_integration,
         )
+
+    @app.get("/tools/diced")
+    def diced_page():
+        integration = _load_diced_integration()
+        if not integration.get("ready"):
+            return _render_diced_unavailable(integration)
+
+        calculator = integration["calculator"]
+        parse_roll_sequence = integration["parse_roll_sequence"]
+        build_result_view = integration["build_result_view"]
+
+        sequence_text = request.args.get("sequence", "").strip()
+        error = ""
+        result_view = None
+
+        if sequence_text:
+            try:
+                sequence = parse_roll_sequence(sequence_text)
+                result = calculator.calculate(sequence, max_global_rerolls=2)
+                result_view = build_result_view(result)
+            except ValueError as exc:
+                error = str(exc)
+
+        return render_template_string(
+            str(integration["template_source"]),
+            sequence_text=sequence_text,
+            error=error,
+            result=result_view,
+            examples=DICED_EXAMPLES,
+        )
+
+    @app.get("/tools/diced/static/<path:filename>")
+    def diced_static(filename: str):
+        integration = _load_diced_integration()
+        if not integration.get("ready"):
+            abort(404)
+
+        return send_from_directory(Path(integration["static_dir"]), filename)
 
     @app.post("/competitions")
     def add_competition():

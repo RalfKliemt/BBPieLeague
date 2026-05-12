@@ -18,7 +18,37 @@
       <header class="hero">
         <h1>BBPieLeague</h1>
         <p>Track blood, touchdowns, and glory across seasons and cups.</p>
+        <div class="hero-tools">
+          <button
+            type="button"
+            class="hero-tool-btn"
+            {% if not diced_integration.ready %}disabled{% endif %}
+            onclick="document.getElementById('diced-dialog').showModal()"
+          >
+            DICED
+          </button>
+          <p class="hero-tool-status{% if not diced_integration.ready %} error{% endif %}">
+            {% if diced_integration.ready %}
+              
+            {% else %}
+              DICED unavailable: {{ diced_integration.error }}
+            {% endif %}
+          </p>
+        </div>
       </header>
+
+      <dialog id="diced-dialog" class="modal modal-iframe">
+        <form method="dialog" class="modal-close-row">
+          <button type="submit" class="icon-btn ghost-btn" aria-label="Close DICED popup" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </form>
+        <div class="iframe-shell">
+          <iframe src="{{ url_for('diced_page') }}" title="DICED" loading="lazy"></iframe>
+        </div>
+      </dialog>
 
       <section class="current-context card">
         <div class="context-main">
