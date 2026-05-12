@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import os
-import secrets
 import subprocess
 import sys
 from datetime import date
@@ -10,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from flask import Flask, abort, flash, redirect, render_template, render_template_string, request, send_from_directory, url_for
+from flask import Flask, abort, redirect, render_template, render_template_string, request, send_from_directory, url_for
 
 from bbpieleague.models import COMPETITION_THEME_CHOICES, Competition, Match, Team
 from bbpieleague.naf import build_naf_coach_url, fetch_naf_coach_name, normalize_naf_coach_number
@@ -198,6 +196,13 @@ def _render_diced_unavailable(status: dict[str, object], status_code: int = 503)
     )
 
 
+def _redirect_with_notice(message: str, category: str = "success"):
+    normalized = category.strip().lower()
+    if normalized not in {"success", "error", "warning"}:
+        normalized = "success"
+    return redirect(url_for("index", notice=message, notice_type=normalized))
+
+
 def _next_team_id(data: LeagueData) -> int:
     if not data.teams:
         return 1
@@ -346,12 +351,16 @@ def create_app() -> Flask:
     template_dir = Path(__file__).with_name("templates")
     static_dir = Path(__file__).with_name("static")
     app = Flask(__name__, template_folder=str(template_dir), static_folder=str(static_dir))
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
     @app.get("/")
     def index():
         data = load_league()
         diced_integration = _diced_status_view()
+        notice = request.args.get("notice", "").strip()
+        notice_type = request.args.get("notice_type", "success").strip().lower()
+        if notice_type not in {"success", "error", "warning"}:
+            notice_type = "success"
+        alerts = [{"category": notice_type, "message": notice}] if notice else []
         active_competition = _active_competition(data)
         matches = sorted(_matches_for_active(data), key=lambda item: item.id, reverse=True)
         teams = sorted(data.teams, key=lambda item: item.id)
@@ -388,6 +397,7 @@ def create_app() -> Flask:
             coach_urls=coach_urls,
             today=date.today().isoformat(),
             diced_integration=diced_integration,
+            alerts=alerts,
         )
 
     @app.get("/tools/diced")
@@ -436,19 +446,16 @@ def create_app() -> Flask:
         theme = request.form.get("theme", "imperial").strip()
 
         if not name:
-            flash("Competition name is required.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Competition name is required.", "error")
 
         try:
             competition = Competition(id=_next_competition_id(data), name=name, kind=kind, theme=theme)
         except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(str(exc), "error")
 
         data.competitions.append(competition)
         save_league(data)
-        flash(f"Added {competition.kind}: {competition.name}", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Added {competition.kind}: {competition.name}", "success")
 
     @app.post("/competitions/use")
     def use_competition():
@@ -458,17 +465,14 @@ def create_app() -> Flask:
         try:
             competition_id = int(competition_id_raw)
         except ValueError:
-            flash("Invalid competition id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid competition id.", "error")
 
         if not _competition_exists(data, competition_id):
-            flash(f"Competition #{competition_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Competition #{competition_id} does not exist.", "error")
 
         data.active_competition_id = competition_id
         save_league(data)
-        flash(f"Active competition set to #{competition_id}.", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Active competition set to #{competition_id}.", "success")
 
     @app.post("/competitions/update")
     def update_competition():
@@ -480,21 +484,17 @@ def create_app() -> Flask:
         try:
             competition_id = int(competition_id_raw)
         except ValueError:
-            flash("Invalid competition id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid competition id.", "error")
 
         competition = _find_competition(data, competition_id)
         if competition is None:
-            flash(f"Competition #{competition_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Competition #{competition_id} does not exist.", "error")
 
         if not name:
-            flash("Competition name is required.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Competition name is required.", "error")
 
         if any(existing.id != competition_id and existing.name.lower() == name.lower() for existing in data.competitions):
-            flash("A season with that name already exists.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("A season with that name already exists.", "error")
 
         previous_name = competition.name
         competition.name = name
@@ -505,13 +505,12 @@ def create_app() -> Flask:
 
         save_league(data)
         if set_default:
-            flash(
+            return _redirect_with_notice(
                 f"Renamed season #{competition.id}: {previous_name} -> {competition.name}. Set as default season.",
                 "success",
             )
         else:
-            flash(f"Renamed season #{competition.id}: {previous_name} -> {competition.name}", "success")
-        return redirect(url_for("index"))
+            return _redirect_with_notice(f"Renamed season #{competition.id}: {previous_name} -> {competition.name}", "success")
 
     @app.post("/teams")
     def add_team():
@@ -522,13 +521,11 @@ def create_app() -> Flask:
         team_url_raw = request.form.get("team_url", "")
 
         if not name:
-            flash("Team name is required.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Team name is required.", "error")
 
         # Keep names unique to avoid confusion in match entry dropdowns and standings.
         if any(team.name.lower() == name.lower() for team in data.teams):
-            flash("A team with that name already exists.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("A team with that name already exists.", "error")
 
         try:
             team_url = _normalize_web_link(team_url_raw)
@@ -537,8 +534,7 @@ def create_app() -> Flask:
                 requested_coach=coach_raw,
             )
         except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(str(exc), "error")
 
         team = Team(
             id=_next_team_id(data),
@@ -551,9 +547,8 @@ def create_app() -> Flask:
         data.teams.append(team)
         save_league(data)
         if warning:
-            flash(warning, "warning")
-        flash(f"Registered team #{team.id}: {team.name}", "success")
-        return redirect(url_for("index"))
+            return _redirect_with_notice(f"Registered team #{team.id}: {team.name}. Warning: {warning}", "warning")
+        return _redirect_with_notice(f"Registered team #{team.id}: {team.name}", "success")
 
     @app.post("/teams/update")
     def update_team():
@@ -567,21 +562,17 @@ def create_app() -> Flask:
         try:
             team_id = int(team_id_raw)
         except ValueError:
-            flash("Invalid team id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid team id.", "error")
 
         team = _find_team(data, team_id)
         if team is None:
-            flash(f"Team #{team_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Team #{team_id} does not exist.", "error")
 
         if not name:
-            flash("Team name is required.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Team name is required.", "error")
 
         if any(existing.id != team_id and existing.name.lower() == name.lower() for existing in data.teams):
-            flash("A team with that name already exists.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("A team with that name already exists.", "error")
 
         try:
             team_url = _normalize_web_link(team_url_raw)
@@ -591,8 +582,7 @@ def create_app() -> Flask:
                 existing_team=team,
             )
         except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(str(exc), "error")
 
         previous_name = team.name
         team.name = name
@@ -602,9 +592,11 @@ def create_app() -> Flask:
         team.coach_url = coach_url
         save_league(data)
         if warning:
-            flash(warning, "warning")
-        flash(f"Updated team #{team.id}: {previous_name} -> {team.name}", "success")
-        return redirect(url_for("index"))
+            return _redirect_with_notice(
+                f"Updated team #{team.id}: {previous_name} -> {team.name}. Warning: {warning}",
+                "warning",
+            )
+        return _redirect_with_notice(f"Updated team #{team.id}: {previous_name} -> {team.name}", "success")
 
     @app.post("/teams/delete")
     def delete_team():
@@ -615,13 +607,11 @@ def create_app() -> Flask:
         try:
             team_id = int(team_id_raw)
         except ValueError:
-            flash("Invalid team id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid team id.", "error")
 
         team = _find_team(data, team_id)
         if team is None:
-            flash(f"Team #{team_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Team #{team_id} does not exist.", "error")
 
         if scope == "global":
             data.teams = [current for current in data.teams if current.id != team_id]
@@ -640,8 +630,7 @@ def create_app() -> Flask:
             data.competition_team_exclusions = cleaned_exclusions
 
             save_league(data)
-            flash(f"Deleted team #{team_id} globally.", "success")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Deleted team #{team_id} globally.", "success")
 
         active_competition_id = data.active_competition_id
         excluded = set(data.competition_team_exclusions.get(active_competition_id, []))
@@ -660,11 +649,10 @@ def create_app() -> Flask:
         removed_matches = before_count - len(data.matches)
 
         save_league(data)
-        flash(
+        return _redirect_with_notice(
             f"Removed team #{team_id} from active season and deleted {removed_matches} season matches.",
             "success",
         )
-        return redirect(url_for("index"))
 
     @app.post("/teams/restore")
     def restore_team():
@@ -674,19 +662,16 @@ def create_app() -> Flask:
         try:
             team_id = int(team_id_raw)
         except ValueError:
-            flash("Invalid team id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid team id.", "error")
 
         team = _find_team(data, team_id)
         if team is None:
-            flash(f"Team #{team_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Team #{team_id} does not exist.", "error")
 
         active_competition_id = data.active_competition_id
         excluded = set(data.competition_team_exclusions.get(active_competition_id, []))
         if team_id not in excluded:
-            flash(f"Team #{team_id} is already active in this season.", "success")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Team #{team_id} is already active in this season.", "success")
 
         excluded.remove(team_id)
         if excluded:
@@ -695,8 +680,7 @@ def create_app() -> Flask:
             data.competition_team_exclusions.pop(active_competition_id, None)
 
         save_league(data)
-        flash(f"Re-added team #{team_id} to active season.", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Re-added team #{team_id} to active season.", "success")
 
     @app.post("/matches")
     def add_match():
@@ -716,22 +700,19 @@ def create_app() -> Flask:
             home_cas = int_field("home_cas")
             away_cas = int_field("away_cas")
         except ValueError as exc:
-            flash(f"Invalid match input: {exc}", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Invalid match input: {exc}", "error")
 
         played_on = request.form.get("played_on", date.today().isoformat()).strip()
 
         if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
-            flash("Both teams must exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Both teams must exist.", "error")
 
         active_team_ids = {
             team.id
             for team in _active_teams_for_competition(data, data.active_competition_id)
         }
         if home_team_id not in active_team_ids or away_team_id not in active_team_ids:
-            flash("Both teams must be active in this season.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Both teams must be active in this season.", "error")
 
         try:
             match = Match(
@@ -746,13 +727,11 @@ def create_app() -> Flask:
                 played_on=played_on,
             )
         except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(str(exc), "error")
 
         data.matches.append(match)
         save_league(data)
-        flash(f"Recorded match #{match.id} in active competition.", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Recorded match #{match.id} in active competition.", "success")
 
     @app.post("/matches/update")
     def update_match():
@@ -773,31 +752,26 @@ def create_app() -> Flask:
             home_cas = int_field("home_cas")
             away_cas = int_field("away_cas")
         except ValueError as exc:
-            flash(f"Invalid match input: {exc}", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Invalid match input: {exc}", "error")
 
         played_on = request.form.get("played_on", date.today().isoformat()).strip()
 
         match = _find_match(data, match_id)
         if match is None:
-            flash(f"Match #{match_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Match #{match_id} does not exist.", "error")
 
         if not _match_in_competition(match, data.active_competition_id):
-            flash("You can only edit matches from the active competition.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("You can only edit matches from the active competition.", "error")
 
         if not _team_exists(data, home_team_id) or not _team_exists(data, away_team_id):
-            flash("Both teams must exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Both teams must exist.", "error")
 
         active_team_ids = {
             team.id
             for team in _active_teams_for_competition(data, data.active_competition_id)
         }
         if home_team_id not in active_team_ids or away_team_id not in active_team_ids:
-            flash("Both teams must be active in this season.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Both teams must be active in this season.", "error")
 
         try:
             # Re-validate with the model rules before mutating stored data.
@@ -813,8 +787,7 @@ def create_app() -> Flask:
                 played_on=played_on,
             )
         except ValueError as exc:
-            flash(str(exc), "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(str(exc), "error")
 
         match.home_team_id = home_team_id
         match.away_team_id = away_team_id
@@ -824,8 +797,7 @@ def create_app() -> Flask:
         match.away_cas = away_cas
         match.played_on = played_on
         save_league(data)
-        flash(f"Updated match #{match.id} in active competition.", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Updated match #{match.id} in active competition.", "success")
 
     @app.post("/matches/delete")
     def delete_match():
@@ -835,22 +807,18 @@ def create_app() -> Flask:
         try:
             match_id = int(match_id_raw)
         except ValueError:
-            flash("Invalid match id.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("Invalid match id.", "error")
 
         match = _find_match(data, match_id)
         if match is None:
-            flash(f"Match #{match_id} does not exist.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice(f"Match #{match_id} does not exist.", "error")
 
         if not _match_in_competition(match, data.active_competition_id):
-            flash("You can only delete matches from the active competition.", "error")
-            return redirect(url_for("index"))
+            return _redirect_with_notice("You can only delete matches from the active competition.", "error")
 
         data.matches = [existing for existing in data.matches if existing.id != match_id]
         save_league(data)
-        flash(f"Deleted match #{match_id} from active competition.", "success")
-        return redirect(url_for("index"))
+        return _redirect_with_notice(f"Deleted match #{match_id} from active competition.", "success")
 
     return app
 

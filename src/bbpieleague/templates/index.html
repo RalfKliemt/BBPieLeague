@@ -37,6 +37,14 @@
         </div>
       </header>
 
+      {% if alerts %}
+      <section class="alerts">
+        {% for alert in alerts %}
+          <div class="alert {{ alert.category }}">{{ alert.message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
       <dialog id="diced-dialog" class="modal modal-iframe">
         <form method="dialog" class="modal-close-row">
           <button type="submit" class="icon-btn ghost-btn" aria-label="Close DICED popup" title="Close">

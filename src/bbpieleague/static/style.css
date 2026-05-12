@@ -511,6 +511,11 @@ tbody tr:nth-child(even) {
   border-color: #d68a96;
 }
 
+.alert.warning {
+  background: #fff8e8;
+  border-color: #e2c27a;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
