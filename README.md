@@ -124,3 +124,26 @@ Data is stored in:
 - `data/league.json`
 
 The file is ignored by git so your league state stays local.
+
+## License
+
+This project is open source under the GNU General Public License, version 3 or
+later. See [LICENSE](LICENSE).
+
+Why this license:
+
+- it allows people to use, modify, and redistribute the code
+- it requires distributed derivative works to remain open source under the same license family
+- it helps ensure follow-up projects built from this code stay open when they are shared
+
+In practical terms, people can fork and improve the project, but if they
+distribute a modified version, they must also make the corresponding source
+code available under GPLv3-compatible terms.
+
+## Disclaimers
+
+- This is an unofficial hobby project developed privately by an individual.
+- No money is being made from this project.
+- This repository is provided as-is, without warranty of any kind.
+- This is a fan-made utility and is not affiliated with, endorsed by, or sponsored by Games Workshop or any other rights holder.
+- Blood Bowl and related names may be trademarks of their respective owners.

@@ -483,6 +483,18 @@ tbody tr:nth-child(even) {
   gap: 0.5rem;
 }
 
+.legal-card p {
+  margin: 0.35rem 0;
+  line-height: 1.45;
+}
+
+.legal-card code {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7faff;
+}
+
 .alert {
   border-radius: 10px;
   padding: 0.6rem 0.8rem;
