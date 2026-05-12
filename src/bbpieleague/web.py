@@ -41,21 +41,35 @@ def _summarize_command_failure(result: subprocess.CompletedProcess[str]) -> str:
 def _ensure_diced_repo() -> dict[str, object]:
     DICED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+    if DICED_REPO_DIR.exists():
+        git_dir = DICED_REPO_DIR / ".git"
+        if git_dir.exists():
+            git_check = _run_git_command(["--version"])
+            if git_check.returncode == 0:
+                pull_result = _run_git_command(["pull", "--ff-only"], cwd=DICED_REPO_DIR)
+                if pull_result.returncode == 0:
+                    return {
+                        "ready": True,
+                        "action": "updated",
+                        "repo_dir": str(DICED_REPO_DIR),
+                        "error": "",
+                    }
+
+        # Non-git checkout (or git update unavailable) is still valid for embedding.
+        return {
+            "ready": True,
+            "action": "local",
+            "repo_dir": str(DICED_REPO_DIR),
+            "error": "",
+        }
+
     git_check = _run_git_command(["--version"])
     if git_check.returncode != 0:
         return {
             "ready": False,
             "action": "unavailable",
             "repo_dir": str(DICED_REPO_DIR),
-            "error": "git is not available in PATH.",
-        }
-
-    if DICED_REPO_DIR.exists() and not (DICED_REPO_DIR / ".git").exists():
-        return {
-            "ready": False,
-            "action": "unavailable",
-            "repo_dir": str(DICED_REPO_DIR),
-            "error": f"{DICED_REPO_DIR} exists but is not a git checkout.",
+            "error": "DICED folder is missing and git is not available in PATH.",
         }
 
     if not DICED_REPO_DIR.exists():
@@ -74,22 +88,6 @@ def _ensure_diced_repo() -> dict[str, object]:
             "repo_dir": str(DICED_REPO_DIR),
             "error": "",
         }
-
-    pull_result = _run_git_command(["pull", "--ff-only"], cwd=DICED_REPO_DIR)
-    if pull_result.returncode != 0:
-        return {
-            "ready": False,
-            "action": "update-failed",
-            "repo_dir": str(DICED_REPO_DIR),
-            "error": _summarize_command_failure(pull_result),
-        }
-
-    return {
-        "ready": True,
-        "action": "updated",
-        "repo_dir": str(DICED_REPO_DIR),
-        "error": "",
-    }
 
 
 def _adapt_diced_template(template_source: str) -> str:
