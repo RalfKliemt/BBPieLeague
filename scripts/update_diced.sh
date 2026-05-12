@@ -22,7 +22,7 @@ if [[ ! -d "$TARGET_DIR" ]]; then
   exit 0
 fi
 
-if [[ -d "$TARGET_DIR/.git" ]]; then
+if git -C "$TARGET_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "[diced] Existing git checkout found, pulling latest changes"
   git -C "$TARGET_DIR" pull --ff-only
   echo "[diced] Update complete"
@@ -40,4 +40,4 @@ fi
 
 echo "[diced] $TARGET_DIR exists but is not a git checkout."
 echo "[diced] Use --force-reclone to replace it with a fresh clone."
-exit 1
+exit 0

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import subprocess
 import sys
 from datetime import date
 from functools import lru_cache
@@ -17,45 +16,15 @@ from bbpieleague.storage import DEFAULT_COMPETITION_ID, LeagueData, load_league,
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DICED_REPO_URL = "https://github.com/RalfKliemt/DICED.git"
 DICED_CACHE_DIR = PROJECT_ROOT / "data" / "integrations" / "diced"
 DICED_REPO_DIR = DICED_CACHE_DIR / "repo"
 DICED_EXAMPLES = ["224s3", "3++ 4+ 5+", "2+ 2d+ 4+", "2+, 3+, 4+"]
-
-
-def _run_git_command(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=str(cwd) if cwd is not None else None,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-
-def _summarize_command_failure(result: subprocess.CompletedProcess[str]) -> str:
-    details = (result.stderr or result.stdout or "git command failed").strip()
-    return details.splitlines()[-1] if details else "git command failed"
 
 
 def _ensure_diced_repo() -> dict[str, object]:
     DICED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     if DICED_REPO_DIR.exists():
-        git_dir = DICED_REPO_DIR / ".git"
-        if git_dir.exists():
-            git_check = _run_git_command(["--version"])
-            if git_check.returncode == 0:
-                pull_result = _run_git_command(["pull", "--ff-only"], cwd=DICED_REPO_DIR)
-                if pull_result.returncode == 0:
-                    return {
-                        "ready": True,
-                        "action": "updated",
-                        "repo_dir": str(DICED_REPO_DIR),
-                        "error": "",
-                    }
-
-        # Non-git checkout (or git update unavailable) is still valid for embedding.
         return {
             "ready": True,
             "action": "local",
@@ -63,31 +32,12 @@ def _ensure_diced_repo() -> dict[str, object]:
             "error": "",
         }
 
-    git_check = _run_git_command(["--version"])
-    if git_check.returncode != 0:
-        return {
-            "ready": False,
-            "action": "unavailable",
-            "repo_dir": str(DICED_REPO_DIR),
-            "error": "DICED folder is missing and git is not available in PATH.",
-        }
-
-    if not DICED_REPO_DIR.exists():
-        clone_result = _run_git_command(["clone", "--depth", "1", DICED_REPO_URL, str(DICED_REPO_DIR)])
-        if clone_result.returncode != 0:
-            return {
-                "ready": False,
-                "action": "clone-failed",
-                "repo_dir": str(DICED_REPO_DIR),
-                "error": _summarize_command_failure(clone_result),
-            }
-
-        return {
-            "ready": True,
-            "action": "cloned",
-            "repo_dir": str(DICED_REPO_DIR),
-            "error": "",
-        }
+    return {
+        "ready": False,
+        "action": "missing",
+        "repo_dir": str(DICED_REPO_DIR),
+        "error": f"DICED folder not found at {DICED_REPO_DIR}.",
+    }
 
 
 def _adapt_diced_template(template_source: str) -> str:

@@ -24,6 +24,29 @@ Initialize a fresh league file:
 bbpieleague init
 ```
 
+## Submodule setup
+
+This project tracks DICED as a git submodule at `data/integrations/diced/repo`.
+
+Fresh clone with submodules:
+
+```bash
+git clone --recurse-submodules <your-fork-or-repo-url>
+cd Pyleague2
+```
+
+If you already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+To pull latest submodule commits from the configured branch:
+
+```bash
+git submodule update --remote --merge
+```
+
 ## Usage
 
 Add teams:
